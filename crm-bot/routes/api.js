@@ -187,7 +187,7 @@ router.put('/orders/:id', asyncHandler(async (req, res) => {
 
   updatePayload.updated_at = new Date().toISOString();
 
-  const { data, error } = await supabase.from('orders').update(updatePayload).eq('id', id).select().single();
+  const { data, error } = await supabase.from('orders').update(updatePayload).eq('id', id).select('id, customer_id, platform, status, items, items_total, shipping_cost, grand_total, wilaya, address, phone, tracking_code, created_at, updated_at').single();
   if (error) return res.status(400).json({ error: error.message });
   if (!data)  return res.status(404).json({ error: 'Order not found' });
 
@@ -218,7 +218,7 @@ router.put('/orders/:id', asyncHandler(async (req, res) => {
 // ── Send order invoice link via WhatsApp ───────────────────────────────────
 router.post('/orders/:id/send-whatsapp', asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { data: order, error } = await supabase.from('orders').select('*').eq('id', id).single();
+  const { data: order, error } = await supabase.from('orders').select('id, phone, address, grand_total, status, items, platform, created_at').eq('id', id).single();
   if (error || !order) return res.status(404).json({ error: 'Order not found' });
 
   const items = typeof order.items === 'string' ? JSON.parse(order.items || '[]') : (order.items || []);
@@ -245,7 +245,7 @@ router.post('/orders/:id/send-email', asyncHandler(async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: 'email is required' });
 
-  const { data: order, error } = await supabase.from('orders').select('*').eq('id', id).single();
+  const { data: order, error } = await supabase.from('orders').select('id, phone, address, grand_total, status, items, platform, created_at').eq('id', id).single();
   if (error || !order) return res.status(404).json({ error: 'Order not found' });
 
   const items = typeof order.items === 'string' ? JSON.parse(order.items || '[]') : (order.items || []);

@@ -2,6 +2,13 @@ const { generateShippingLabel } = require('./shipping_label');
 const logger = require('../utils/logger');
 const supabase = require('../lib/supabase');
 
+// ── Optimized column selections (avoid `select('*')`) ──────────────────────
+const COLS = {
+  ORDERS_LIST: 'id, customer_id, platform, status, items, items_total, shipping_cost, grand_total, wilaya, address, phone, tracking_code, created_at, updated_at',
+  PRODUCTS: 'id, name_ar, name_fr, price_dzd, stock, active, category, weight_kg, created_at',
+  SHIPPING_ZONES: 'zone_id, name, price, wilayas, created_at',
+};
+
 function extractOrderItems(text) {
   const items = [];
   const lineRegex = /(.*?)\s+x(\d+)\s+—\s+(\d+)/g;
@@ -52,17 +59,24 @@ async function saveOrder(customerId, platform, confirmMessage) {
   return orderId;
 }
 
+// ── Optimized reads (specific columns + smaller payloads) ──────────────────
 async function getProducts() {
-  const { data, error } = await supabase.from('products').select('*').order('id');
+  const start = Date.now();
+  const { data, error } = await supabase
+    .from('products')
+    .select(COLS.PRODUCTS)
+    .order('id');
   if (error) { logger.error(`products select: ${error.message}`); return []; }
+  logger.debug(`getProducts: ${data?.length || 0} rows in ${Date.now() - start}ms`);
   return data || [];
 }
 
 async function getShippingZones() {
-  const { data, error } = await supabase.from('shipping_zones').select('*');
+  const { data, error } = await supabase
+    .from('shipping_zones')
+    .select(COLS.SHIPPING_ZONES);
   if (error) return [];
-  
-  // Enrich zones with Home and Desk prices from process.env, falling back to default price
+
   return (data || []).map(zone => {
     const keyHome = `${zone.zone_id.toUpperCase()}_PRICE_HOME`;
     const keyDesk = `${zone.zone_id.toUpperCase()}_PRICE_DESK`;
@@ -75,19 +89,34 @@ async function getShippingZones() {
 }
 
 async function getOrders() {
-  const { data, error } = await supabase.from('orders').select('*').order('created_at', { ascending: false }).limit(100);
+  const start = Date.now();
+  const { data, error } = await supabase
+    .from('orders')
+    .select(COLS.ORDERS_LIST)
+    .order('created_at', { ascending: false })
+    .limit(100);
   if (error) return [];
+  logger.debug(`getOrders: ${data?.length || 0} rows in ${Date.now() - start}ms`);
   return data || [];
 }
 
 async function addProduct(product) {
-  const { data, error } = await supabase.from('products').insert(product).select().single();
+  const { data, error } = await supabase
+    .from('products')
+    .insert(product)
+    .select(COLS.PRODUCTS)
+    .single();
   if (error) throw error;
   return data;
 }
 
 async function updateProduct(id, product) {
-  const { data, error } = await supabase.from('products').update(product).eq('id', id).select().single();
+  const { data, error } = await supabase
+    .from('products')
+    .update(product)
+    .eq('id', id)
+    .select(COLS.PRODUCTS)
+    .single();
   if (error) throw error;
   return data;
 }
@@ -98,13 +127,13 @@ async function deleteProduct(id) {
   return true;
 }
 
-module.exports = { 
-  saveOrder, 
-  getOrders, 
-  getProducts, 
-  getShippingZones, 
-  extractOrderItems, 
-  extractShippingInfo, 
+module.exports = {
+  saveOrder,
+  getOrders,
+  getProducts,
+  getShippingZones,
+  extractOrderItems,
+  extractShippingInfo,
   extractTotal,
   addProduct,
   updateProduct,

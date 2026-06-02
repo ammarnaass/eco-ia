@@ -9,6 +9,7 @@ loadConfigIntoProcessEnv();
 const express = require('express');
 const path = require('path');
 const cors = require('cors');
+const compression = require('compression');
 const logger = require('./utils/logger');
 
 // Routes
@@ -18,7 +19,50 @@ const instagramRouter = require('./routes/instagram');
 const apiRouter       = require('./routes/api');
 
 const app = express();
-app.use(cors());
+
+// ── Performance: Gzip/Brotli compression for all responses ────────────────
+app.use(compression({
+  threshold: 512,           // Only compress responses > 512 bytes
+  level: 6,                 // Compression level (1-9, 6 is balanced)
+  filter: (req, res) => {
+    if (req.headers['x-no-compression']) return false;
+    return compression.filter(req, res);
+  }
+}));
+
+// ── Performance: Response time + monitoring ────────────────────────────────
+app.use((req, res, next) => {
+  const start = process.hrtime.bigint();
+  res.setHeader('X-Powered-By', 'eco-ia-crm');
+
+  // Intercept writeHead to inject X-Response-Time before headers are sent
+  const originalWriteHead = res.writeHead.bind(res);
+  res.writeHead = function (statusCode, ...args) {
+    const durationMs = Number(process.hrtime.bigint() - start) / 1e6;
+    const durationStr = durationMs.toFixed(2);
+    try { res.setHeader('X-Response-Time', `${durationStr}ms`); } catch { /* noop */ }
+    return originalWriteHead(statusCode, ...args);
+  };
+
+  res.on('finish', () => {
+    const durationMs = Number(process.hrtime.bigint() - start) / 1e6;
+    const durationStr = durationMs.toFixed(2);
+
+    // Log slow requests (>500ms) and all errors
+    if (durationMs > 500 || res.statusCode >= 400) {
+      const level = res.statusCode >= 500 ? 'error' : res.statusCode >= 400 ? 'warn' : 'info';
+      logger[level](`${req.method} ${req.originalUrl} → ${res.statusCode} (${durationStr}ms)`);
+    }
+  });
+
+  next();
+});
+
+app.use(cors({
+  origin: process.env.CORS_ORIGIN || '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  credentials: true,
+}));
 app.get('/labels/label_:id.pdf', async (req, res, next) => {
   const { id } = req.params;
   const filePath = path.join(__dirname, 'labels', `label_${id}.pdf`);
@@ -30,7 +74,7 @@ app.get('/labels/label_:id.pdf', async (req, res, next) => {
   
   try {
     const supabase = require('./lib/supabase');
-    const { data: order, error } = await supabase.from('orders').select('*').eq('id', id).single();
+    const { data: order, error } = await supabase.from('orders').select('id, phone, address, grand_total, status, items, platform, created_at, shipping_cost, wilaya').eq('id', id).single();
     if (error || !order) {
       return res.status(404).send('Order not found');
     }
@@ -81,7 +125,14 @@ app.use('/api', apiRouter);
 
 // Health
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', uptime: process.uptime(), memory: process.memoryUsage().rss });
+  res.json({
+    status: 'ok',
+    uptime: process.uptime(),
+    memory: process.memoryUsage().rss,
+    pid: process.pid,
+    node: process.version,
+    timestamp: Date.now(),
+  });
 });
 
 // Global error handler
