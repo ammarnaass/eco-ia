@@ -44,4 +44,7 @@ export const api = {
   // Meta connection test (for Facebook/Instagram)
   testConnection: (platform) =>
     fetchJSON(`/test-connection?platform=${platform}`, { method: 'POST' }),
+  // WhatsApp info + test
+  getWhatsAppInfo: () => fetchJSON('/whatsapp/info'),
+  testWhatsAppConnection: () => fetchJSON('/whatsapp/test-connection', { method: 'POST' }),
 }

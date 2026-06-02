@@ -395,4 +395,65 @@ router.post('/test-connection', asyncHandler(async (req, res) => {
   }
 }));
 
+// ── WhatsApp account info + test connection ────────────────────────────────
+router.get('/whatsapp/info', asyncHandler(async (req, res) => {
+  const token = getConfig('WHATSAPP_TOKEN') || process.env.WHATSAPP_TOKEN;
+  const phoneId = getConfig('WHATSAPP_PHONE_ID') || process.env.WHATSAPP_PHONE_ID;
+  const verifyToken = getConfig('FB_VERIFY_TOKEN');
+
+  // Prefer DB-stored accounts, fallback to env vars
+  let dbAccounts = [];
+  try { dbAccounts = await listAccounts(); } catch { /* silent */ }
+
+  res.json({
+    has_credentials: !!(token && phoneId),
+    source: dbAccounts.length > 0 ? 'database' : (token && phoneId) ? 'env' : 'none',
+    phone_number_id: phoneId || null,
+    verify_token: verifyToken || null,
+    access_token_preview: token ? `${token.slice(0, 12)}...${token.slice(-6)}` : null,
+    database_accounts: dbAccounts,
+  });
+}));
+
+router.post('/whatsapp/test-connection', asyncHandler(async (req, res) => {
+  const token = getConfig('WHATSAPP_TOKEN') || process.env.WHATSAPP_TOKEN;
+  const phoneId = getConfig('WHATSAPP_PHONE_ID') || process.env.WHATSAPP_PHONE_ID;
+
+  if (!token || !phoneId) {
+    return res.json({ success: false, message: 'بيانات WhatsApp غير مكتملة. تأكد من WHATSAPP_TOKEN و WHATSAPP_PHONE_ID.' });
+  }
+
+  try {
+    // 1) Verify token works by fetching phone number info
+    const phoneRes = await fetch(`https://graph.facebook.com/v18.0/${phoneId}?access_token=${token}&fields=id,display_phone_number,verified_name,quality_rating`);
+    const phoneData = await phoneRes.json();
+
+    if (!phoneRes.ok || phoneData.error) {
+      return res.json({
+        success: false,
+        message: `فشل التحقق من الرقم: ${phoneData.error?.message || 'استجابة غير صالحة'}`,
+      });
+    }
+
+    // 2) Verify webhook is reachable
+    const API_BASE = process.env.APP_URL || `http://localhost:${process.env.PORT || 3000}`;
+    const webhookUrl = `${API_BASE}/api/whatsapp/webhook`;
+
+    return res.json({
+      success: true,
+      message: 'الاتصال بـ WhatsApp API ناجح',
+      phone: {
+        id: phoneData.id,
+        display_number: phoneData.display_phone_number,
+        verified_name: phoneData.verified_name,
+        quality_rating: phoneData.quality_rating,
+      },
+      webhook_url: webhookUrl,
+      verify_token: getConfig('FB_VERIFY_TOKEN'),
+    });
+  } catch (e) {
+    return res.json({ success: false, message: 'خطأ في الاتصال: ' + e.message });
+  }
+}));
+
 module.exports = router;
