@@ -2,8 +2,8 @@
  * dataService — طبقة وسيطة موحدة للوصول للبيانات
  *
  * الاستراتيجية المختلطة:
- *   - READ  (GET)    → Supabase مباشرة (سريع، بسيط)
- *   - WRITE (POST/PUT/DELETE) + منطق معقد (AI, PDF, Email)
+ *   - CRUD (GET/POST/PUT/DELETE) → Supabase مباشرة (أسرع، أبسط، أكثر موثوقية)
+ *   - المنطق المعقد (AI, PDF, Email, WhatsApp sending, Encryption)
  *                    → Backend (crm-bot) عبر api.js
  *
  * في حال فشل Supabase (RLS, network) → fallback تلقائي على Backend.
@@ -31,6 +31,27 @@ async function withFallback(supabaseCall, backendCall) {
   }
 }
 
+// Direct Supabase operation with backend fallback
+async function directWithFallback(supabaseCall, backendCall) {
+  if (!isSupabaseConfigured) {
+    const data = await backendCall()
+    return { data, source: 'backend' }
+  }
+  try {
+    const result = await supabaseCall()
+    if (result.error) throw result.error
+    return { data: result.data, source: 'supabase' }
+  } catch (e) {
+    console.warn('[dataService] Supabase write failed, falling back to Backend:', e.message)
+    try {
+      const data = await backendCall()
+      return { data, source: 'backend' }
+    } catch (backendError) {
+      throw backendError
+    }
+  }
+}
+
 export const dataService = {
   // ─── Products ─────────────────────────────────────────────
   products: {
@@ -42,9 +63,18 @@ export const dataService = {
       () => supabase.from('products').select('*').eq('id', id).single(),
       () => api.getProducts().then(arr => arr.find(p => p.id === id))
     ),
-    create: (data) => api.createProduct(data),
-    update: (id, data) => api.updateProduct(id, data),
-    delete: (id) => api.deleteProduct(id),
+    create: (data) => directWithFallback(
+      () => supabase.from('products').insert(data).select().single(),
+      () => api.createProduct(data)
+    ),
+    update: (id, data) => directWithFallback(
+      () => supabase.from('products').update(data).eq('id', id).select().single(),
+      () => api.updateProduct(id, data)
+    ),
+    delete: (id) => directWithFallback(
+      () => supabase.from('products').delete().eq('id', id).select().single(),
+      () => api.deleteProduct(id)
+    ),
   },
 
   // ─── Orders ───────────────────────────────────────────────
@@ -57,7 +87,10 @@ export const dataService = {
       () => supabase.from('orders').select('*').eq('id', id).single(),
       () => api.getOrders().then(arr => arr.find(o => o.id === id))
     ),
-    update: (id, data) => api.updateOrder(id, data),
+    update: (id, data) => directWithFallback(
+      () => supabase.from('orders').update(data).eq('id', id).select().single(),
+      () => api.updateOrder(id, data)
+    ),
     sendWhatsApp: (id) => api.sendOrderWhatsApp(id),
     sendEmail: (id, email) => api.sendOrderEmail(id, email),
   },
