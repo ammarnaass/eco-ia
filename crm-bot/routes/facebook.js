@@ -9,8 +9,25 @@ const router = express.Router();
 
 router.get('/', (req, res) => {
   const token = getConfig('FB_VERIFY_TOKEN', 'my_secret_token');
-  if (req.query['hub.verify_token'] === token) return res.send(req.query['hub.challenge']);
-  res.sendStatus(403);
+  const receivedToken = req.query['hub.verify_token'];
+  const challenge = req.query['hub.challenge'];
+
+  if (!receivedToken) {
+    logger.warn(`Facebook webhook: missing hub.verify_token`);
+    return res.status(400).send('Missing hub.verify_token');
+  }
+
+  if (receivedToken !== token) {
+    logger.warn(`Facebook webhook verify FAILED — received "${receivedToken}" but expected "${token}"`);
+    return res.status(403).send('Forbidden: verify_token mismatch');
+  }
+
+  if (!challenge) {
+    return res.status(400).send('Missing hub.challenge');
+  }
+
+  logger.info(`Facebook webhook verified ✓ (challenge=${challenge})`);
+  res.status(200).send(challenge);
 });
 
 router.post('/', verifySignature, async (req, res) => {

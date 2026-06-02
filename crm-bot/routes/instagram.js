@@ -10,8 +10,25 @@ const router = express.Router();
 // GET — Meta webhook verification for Instagram
 router.get('/', (req, res) => {
   const token = getConfig('FB_VERIFY_TOKEN', 'my_secret_token');
-  if (req.query['hub.verify_token'] === token) return res.send(req.query['hub.challenge']);
-  res.sendStatus(403);
+  const receivedToken = req.query['hub.verify_token'];
+  const challenge = req.query['hub.challenge'];
+
+  if (!receivedToken) {
+    logger.warn(`Instagram webhook: missing hub.verify_token (mode=${req.query['hub.mode'] || 'n/a'})`);
+    return res.status(400).send('Missing hub.verify_token');
+  }
+
+  if (receivedToken !== token) {
+    logger.warn(`Instagram webhook verify FAILED — received "${receivedToken}" but expected "${token}"`);
+    return res.status(403).send('Forbidden: verify_token mismatch');
+  }
+
+  if (!challenge) {
+    return res.status(400).send('Missing hub.challenge');
+  }
+
+  logger.info(`Instagram webhook verified ✓ (challenge=${challenge})`);
+  res.status(200).send(challenge);
 });
 
 // POST — Instagram messages webhook

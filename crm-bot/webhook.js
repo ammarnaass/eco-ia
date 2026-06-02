@@ -112,15 +112,17 @@ app.use(express.json({
   }
 }));
 
-// Webhooks
+// Webhooks — يجب تعريفها قبل app.use('/api', apiRouter) لتفادي catch-all
 app.use('/webhook/whatsapp',  whatsappRouter);
 app.use('/webhook/facebook',  facebookRouter);
 app.use('/webhook/instagram', instagramRouter);
 
-// Meta-expected webhook path (under /api for convenience)
-app.use('/api/whatsapp/webhook', whatsappRouter);
+// Meta-expected webhook paths (under /api for convenience) — must be before /api catch-all
+app.use('/api/whatsapp/webhook',  whatsappRouter);
+app.use('/api/facebook/webhook',  facebookRouter);
+app.use('/api/instagram/webhook', instagramRouter);
 
-// REST API
+// REST API (catch-all for /api/*)
 app.use('/api', apiRouter);
 
 // Health

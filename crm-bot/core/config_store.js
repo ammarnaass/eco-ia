@@ -17,8 +17,11 @@ async function getAllConfig() {
 
 function getConfig(key, fallback = undefined) {
   // Prefer live cache, then process.env, then fallback
-  if (_liveConfig[key] !== undefined) return _liveConfig[key];
-  if (process.env[key] !== undefined) return process.env[key];
+  // Note: empty string is treated as missing (Supabase sometimes returns '' instead of NULL)
+  const live = _liveConfig[key];
+  if (live !== undefined && live !== null && live !== '') return live;
+  const envVal = process.env[key];
+  if (envVal !== undefined && envVal !== null && envVal !== '') return envVal;
   return fallback;
 }
 
@@ -50,9 +53,9 @@ async function loadConfigIntoProcessEnv() {
   try {
     const config = await getAllConfig();
     for (const [key, value] of Object.entries(config)) {
-      if (value !== undefined && value !== null) {
-        process.env[key] = value.toString();
-      }
+      // Skip empty/null values — don't override valid env vars with empty strings from Supabase
+      if (value === undefined || value === null || value === '') continue;
+      process.env[key] = value.toString();
     }
   } catch (e) {
     console.error('config_store: Failed to load config into process.env —', e.message);
