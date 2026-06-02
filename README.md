@@ -233,29 +233,81 @@ const { data, source } = await dataService.products.list()
 // source: 'supabase' أو 'backend'
 ```
 
-### ⚠️ ملاحظة هامة: RLS Policies في Supabase
+### ⚠️ خطوة حرجة: تطبيق RLS Policies في Supabase
 
-لاستخدام Supabase من الواجهة مباشرة، يجب إضافة **Row Level Security Policies** في Supabase Dashboard → SQL Editor:
+إذا كانت الواجهة لا تستطيع الإضافة/العرض، فالمشكلة على الأرجح في **Row Level Security** في Supabase.
+
+**📋 خطوات التطبيق:**
+
+1. افتح [Supabase Dashboard](https://supabase.com/dashboard) → مشروعك → **SQL Editor**
+2. افتح الملف: `crm-bot/db/enable-rls-for-frontend.sql`
+3. انسخ محتواه والصقه في SQL Editor
+4. اضغط **Run** (أو Ctrl+Enter)
+5. يجب أن تظهر رسالة: `Success. No rows returned`
+
+**الـ SQL الجاهز:**
 
 ```sql
--- السماح للـ anon role بقراءة المنتجات
-CREATE POLICY "anon_read_products" ON products
-  FOR SELECT TO anon USING (true);
+-- ═══════════════════════════════════════════════════════════════
+-- تفعيل RLS على الجداول
+-- ═══════════════════════════════════════════════════════════════
+ALTER TABLE products         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE orders           ENABLE ROW LEVEL SECURITY;
+ALTER TABLE conversations    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE customers        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE token_usage      ENABLE ROW LEVEL SECURITY;
 
--- السماح للـ anon role بإضافة/تعديل/حذف المنتجات
-CREATE POLICY "anon_write_products" ON products
+-- ═══════════════════════════════════════════════════════════════
+-- حذف policies قديمة
+-- ═══════════════════════════════════════════════════════════════
+DROP POLICY IF EXISTS "anon_all_products"        ON products;
+DROP POLICY IF EXISTS "anon_all_orders"          ON orders;
+DROP POLICY IF EXISTS "anon_all_conversations"   ON conversations;
+DROP POLICY IF EXISTS "anon_all_customers"       ON customers;
+DROP POLICY IF EXISTS "anon_read_token_usage"    ON token_usage;
+DROP POLICY IF EXISTS "anon_read_app_config"     ON app_config;
+DROP POLICY IF EXISTS "anon_read_whatsapp_accounts" ON whatsapp_accounts;
+
+-- ═══════════════════════════════════════════════════════════════
+-- إنشاء policies للـ anon role
+-- ═══════════════════════════════════════════════════════════════
+CREATE POLICY "anon_all_products" ON products
   FOR ALL TO anon USING (true) WITH CHECK (true);
 
--- السماح للـ anon role بقراءة/تعديل الطلبات
 CREATE POLICY "anon_all_orders" ON orders
   FOR ALL TO anon USING (true) WITH CHECK (true);
 
--- السماح للـ anon role بقراءة المحادثات
-CREATE POLICY "anon_read_conversations" ON conversations
+CREATE POLICY "anon_all_conversations" ON conversations
+  FOR ALL TO anon USING (true) WITH CHECK (true);
+
+CREATE POLICY "anon_all_customers" ON customers
+  FOR ALL TO anon USING (true) WITH CHECK (true);
+
+CREATE POLICY "anon_read_token_usage" ON token_usage
   FOR SELECT TO anon USING (true);
+
+CREATE POLICY "anon_read_app_config" ON app_config
+  FOR SELECT TO anon USING (true);
+
+CREATE POLICY "anon_read_whatsapp_accounts" ON whatsapp_accounts
+  FOR SELECT TO anon USING (true);
+
+-- ═══════════════════════════════════════════════════════════════
+-- إصلاح: زيادة طول عمود products.id من 10 إلى 20
+-- ═══════════════════════════════════════════════════════════════
+ALTER TABLE products ALTER COLUMN id TYPE VARCHAR(20);
 ```
 
-> **ملاحظة:** للـ production، استبدل `true` بـ RLS أكثر تقييداً (مثلاً: `auth.uid() = user_id`).
+**🧪 للتحقق من نجاح التطبيق:**
+
+```bash
+cd crm-bot
+node test-anon-access.js
+```
+
+إذا ظهر `✅ ALL TESTS PASSED`، فكل شيء يعمل! 🎉
+
+> **ملاحظة أمان:** للـ production، استبدل `true` بـ RLS أكثر تقييداً (مثلاً: `auth.uid() = user_id`). الـ current setup مناسب للتطوير والـ demo فقط.
 
 ---
 

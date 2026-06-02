@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS orders (
 );
 
 CREATE TABLE IF NOT EXISTS products (
-  id            VARCHAR(10) PRIMARY KEY,
+  id            VARCHAR(20) PRIMARY KEY,
   name_ar       VARCHAR(200),
   name_fr       VARCHAR(200),
   price_dzd     DECIMAL(10,2),
