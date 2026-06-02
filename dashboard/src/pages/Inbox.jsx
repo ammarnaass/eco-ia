@@ -96,8 +96,8 @@ export default function Inbox() {
     try {
       await api.sendManualReply(selectedConv.userId, replyText, selectedConv.platform)
       setReplyText('')
-      const updated = await api.getConversations()
-      setConversations(updated)
+      const { data } = await dataService.conversations.list()
+      setConversations(data || [])
     } catch (err) {
       alert('فشل في إرسال الرسالة: ' + err.message)
     } finally {
@@ -116,8 +116,8 @@ export default function Inbox() {
     setSendingAI(true)
     try {
       await api.sendAIReply(selectedConv.userId, lastUserMessage, selectedConv.platform)
-      const updated = await api.getConversations()
-      setConversations(updated)
+      const { data } = await dataService.conversations.list()
+      setConversations(data || [])
     } catch (err) {
       alert('فشل توليد رد الذكاء الاصطناعي: ' + err.message)
     } finally {
