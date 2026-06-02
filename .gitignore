@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+.env.*
+*.log
+labels/
+logs/
+.vscode/
+.idea/
+.DS_Store
+*.pem

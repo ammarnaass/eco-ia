@@ -1,0 +1,11 @@
+{
+  "zones": {
+    "zone1": { "name": "المركز", "price": 400, "wilayas": ["16","09","42"] },
+    "zone2": { "name": "الشرق",  "price": 500, "wilayas": ["25","23","19"] },
+    "zone3": { "name": "الغرب",  "price": 500, "wilayas": ["31","13","22"] },
+    "zone4": { "name": "الجنوب", "price": 700, "wilayas": ["07","30","01"] },
+    "zone5": { "name": "الهضاب", "price": 550, "wilayas": ["28","05","34"] }
+  },
+  "free_shipping_threshold": 5000,
+  "free_shipping_zones": ["zone1","zone2"]
+}

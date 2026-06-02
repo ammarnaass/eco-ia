@@ -1,0 +1,21 @@
+{
+  "name": "crm-bot",
+  "version": "1.0.0",
+  "description": "نظام CRM ذكي للتجارة الإلكترونية - ربط واتساب وفيسبوك وانستغرام",
+  "main": "webhook.js",
+  "scripts": {
+    "start": "node webhook.js",
+    "dev": "node --watch-path=core --watch-path=routes --watch-path=utils --watch-path=middleware --watch-path=webhook.js webhook.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.106.2",
+    "arabic-persian-reshaper": "^1.0.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.0",
+    "express": "^4.21.0",
+    "googleapis": "^140.0.0",
+    "nodemailer": "^8.0.10",
+    "pdfkit": "^0.15.0",
+    "pg": "^8.21.0"
+  }
+}

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CRM Dashboard</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div id="app">
+    <aside id="sidebar">
+      <div class="logo">📊 CRM</div>
+      <nav>
+        <a href="#" data-page="dashboard" class="active">📈 لوحة التحكم</a>
+        <a href="#" data-page="products">📦 المنتجات</a>
+        <a href="#" data-page="orders">🛒 الطلبات</a>
+        <a href="#" data-page="conversations">💬 المحادثات</a>
+        <a href="#" data-page="settings">⚙️ الإعدادات</a>
+      </nav>
+      <div class="sidebar-footer">
+        <button id="logoutBtn">🚪 تسجيل الخروج</button>
+      </div>
+    </aside>
+
+    <main id="main-content">
+      <header>
+        <h1 id="page-title">لوحة التحكم</h1>
+        <div class="header-actions">
+          <span id="current-time"></span>
+        </div>
+      </header>
+      <div id="content-area"></div>
+    </main>
+  </div>
+
+  <!-- Login Modal -->
+  <div id="login-modal" class="modal">
+    <div class="modal-content login-box">
+      <h2>🔐 تسجيل الدخول</h2>
+      <form id="login-form">
+        <input type="password" id="login-password" placeholder="كلمة المرور" required>
+        <button type="submit">دخول</button>
+        <p id="login-error" class="error"></p>
+      </form>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
