@@ -179,17 +179,21 @@ VITE_SUPABASE_ANON_KEY=eyJhbGciOi...      # Anon/Publishable Key
 
 ---
 
-## 🔌 الربط بقاعدة البيانات (Hybrid Architecture)
+## 🔌 الربط بقاعدة البيانات (Smart Hybrid Architecture)
 
-يستخدم المشروع **استراتيجية هجينة ذكية** للوصول إلى Supabase:
+يستخدم المشروع **استراتيجية مختلطة ذكية** للوصول إلى Supabase:
 
 ```
 ┌─────────────────────────────────────────────────────┐
 │         Dashboard (React + Vite)                    │
 ├─────────────────────────────────────────────────────┤
 │  dataService.js (طبقة وسيطة موحدة)                  │
-│   ├─ READ  (GET)    → Supabase مباشرة ⚡            │
-│   └─ WRITE + منطق  → Backend (crm-bot) 🔒          │
+│   ├─ المنتجات CRUD        → Supabase مباشرة ⚡       │
+│   ├─ الطلبات CRUD         → Supabase مباشرة ⚡       │
+│   ├─ استعلامات التوكنز    → Backend (Backend) 🔒    │
+│   ├─ AI, تنفيذ الطلبات   → Backend (Backend) 🔒    │
+│   ├─ ردود, Webhooks      → Backend (Backend) 🔒    │
+│   └─ Fallback تلقائي → Backend لو Supabase فشل ⚠️   │
 └─────────────────────────────────────────────────────┘
            ↓                          ↓
    (Supabase REST)            (Express + CORS)
@@ -198,19 +202,24 @@ VITE_SUPABASE_ANON_KEY=eyJhbGciOi...      # Anon/Publishable Key
 ```
 
 ### القاعدة الذهبية
-| نوع الطلب | المسار | السبب |
+| نوع العملية | المسار | السبب |
 |---|---|---|
-| **GET** (عرض، قراءة) | Supabase مباشرة | ⚡ أسرع، أبسط |
-| **POST/PUT/DELETE** (كتابة) | Backend | 🔒 منطق تجاري |
-| **AI, PDF, Email, Webhooks** | Backend فقط | 🧠 معالجة معقدة |
+| **منتجات CRUD** (إضافة/تعديل/حذف/عرض) | Supabase مباشرة | ⚡ أسرع، أبسط، أكثر موثوقية |
+| **طلبات CRUD** (تعديل الحالة، عرض) | Supabase مباشرة | ⚡ سريع للقراءة + تعديل الحالة |
+| **تنفيذ الطلبات** (PDF/Email/WhatsApp) | Backend | 🧠 يحتاج منطق + مكتبات خارجية |
+| **استعلامات التوكنز** (إحصائيات + روابط منصات) | Backend | 🔒 حسابات مُجمّعة + AI tracking |
+| **AI Replies** | Backend | 🧠 يحتاج مفاتيح + token usage |
+| **Webhooks** (Meta) | Backend | 🔄 SSE real-time + verification |
+| **إعدادات** (Config/WhatsApp accounts) | Backend | 🔐 مشفّر AES-256-GCM |
 | **SSE (real-time updates)** | Backend | 🔄 streams فقط |
 
 ### الفوائد
-- ⚡ **أداء عالي**: استعلامات القراءة أسرع بمرتين (skip الـ Backend)
-- 🔄 **Fallback تلقائي**: لو Supabase فشل → Backend تلقائياً
+- ⚡ **أداء عالي**: المنتجات والطلبات CRUD مباشر مع Supabase (سريع جداً)
+- 🔄 **Fallback ذكي**: لو Supabase فشل → Backend تلقائياً بدون تأثير على المستخدم
 - 🔒 **أمان**: Service Role Key يبقى في Backend فقط
 - 🎯 **شفافية**: badge صغير يظهر مصدر البيانات ("Supabase" أو "Backend")
 - 💰 **تكلفة أقل**: ضغط أقل على Backend
+- 🛡️ **موثوقية عالية**: يعمل حتى لو `crm-bot` متوقف (للـ CRUD)
 
 ### الملفات الرئيسية
 - `dashboard/src/lib/dataService.js` — الطبقة الوسيطة الموحدة
@@ -223,6 +232,30 @@ VITE_SUPABASE_ANON_KEY=eyJhbGciOi...      # Anon/Publishable Key
 const { data, source } = await dataService.products.list()
 // source: 'supabase' أو 'backend'
 ```
+
+### ⚠️ ملاحظة هامة: RLS Policies في Supabase
+
+لاستخدام Supabase من الواجهة مباشرة، يجب إضافة **Row Level Security Policies** في Supabase Dashboard → SQL Editor:
+
+```sql
+-- السماح للـ anon role بقراءة المنتجات
+CREATE POLICY "anon_read_products" ON products
+  FOR SELECT TO anon USING (true);
+
+-- السماح للـ anon role بإضافة/تعديل/حذف المنتجات
+CREATE POLICY "anon_write_products" ON products
+  FOR ALL TO anon USING (true) WITH CHECK (true);
+
+-- السماح للـ anon role بقراءة/تعديل الطلبات
+CREATE POLICY "anon_all_orders" ON orders
+  FOR ALL TO anon USING (true) WITH CHECK (true);
+
+-- السماح للـ anon role بقراءة المحادثات
+CREATE POLICY "anon_read_conversations" ON conversations
+  FOR SELECT TO anon USING (true);
+```
+
+> **ملاحظة:** للـ production، استبدل `true` بـ RLS أكثر تقييداً (مثلاً: `auth.uid() = user_id`).
 
 ---
 
