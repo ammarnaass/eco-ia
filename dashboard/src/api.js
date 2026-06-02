@@ -1,12 +1,12 @@
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
 
 async function fetchJSON(url, options) {
   const res = await fetch(`${API_BASE}${url}`, {
     headers: { 'Content-Type': 'application/json' },
     ...options,
-  });
-  if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
-  return res.json();
+  })
+  if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`)
+  return res.json()
 }
 
 export const api = {
@@ -41,4 +41,7 @@ export const api = {
     fetchJSON(`/orders/${id}/send-whatsapp`, { method: 'POST' }),
   sendOrderEmail: (id, email) =>
     fetchJSON(`/orders/${id}/send-email`, { method: 'POST', body: JSON.stringify({ email }) }),
-};
+  // Meta connection test (for Facebook/Instagram)
+  testConnection: (platform) =>
+    fetchJSON(`/test-connection?platform=${platform}`, { method: 'POST' }),
+}

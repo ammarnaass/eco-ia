@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
 import {
   MessageSquare, ShoppingCart, DollarSign, Bot, Sparkles, ArrowLeft,
-  TrendingUp, Package, Users, Zap, Eye, Plus, ArrowUpRight
+  TrendingUp, Package, Users, Zap, Eye, Plus, ArrowUpRight, Database
 } from 'lucide-react'
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
 import KPICard from '../components/stats/KPICard.jsx'
 import { api } from '../api.js'
+import dataService from '../lib/dataService.js'
 import { channelConfig, gradients } from '../lib/design-tokens.js'
 import { SkeletonCard } from '../components/ui/Skeleton.jsx'
 import EmptyState from '../components/ui/EmptyState.jsx'
@@ -29,13 +30,15 @@ export default function Dashboard() {
 
     setLoading(true)
     Promise.all([
-      api.getDashboardStats().catch(() => null),
-      api.getOrders().catch(() => []),
-      api.getConversations().catch(() => []),
-    ]).then(([s, o, c]) => {
+      // الإحصائيات المُجمّعة تبقى عبر Backend
+      dataService.analytics.dashboard().catch(() => null),
+      // الطلبات والمحادثات تأتي من Supabase مباشرة (أسرع)
+      dataService.orders.list().catch(() => ({ data: [] })),
+      dataService.conversations.list().catch(() => ({ data: [] })),
+    ]).then(([s, oRes, cRes]) => {
       setStats(s)
-      setOrders(o)
-      setConversations(c)
+      setOrders(oRes.data || [])
+      setConversations(cRes.data || [])
     }).finally(() => setLoading(false))
   }, [])
 

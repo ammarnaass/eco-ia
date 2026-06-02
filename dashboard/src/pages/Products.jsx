@@ -1,15 +1,17 @@
 import { useState, useEffect, useMemo } from 'react'
 import {
   Search, Plus, Edit2, Trash2, CheckCircle, AlertCircle, X, Package,
-  Tag, DollarSign, Boxes, Eye, EyeOff, Filter, Loader2
+  Tag, DollarSign, Boxes, Eye, EyeOff, Filter, Loader2, Database
 } from 'lucide-react'
 import { api } from '../api.js'
+import dataService from '../lib/dataService.js'
 import { gradients, colorVariants } from '../lib/design-tokens.js'
 import EmptyState from '../components/ui/EmptyState.jsx'
 
 export default function Products() {
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
+  const [dataSource, setDataSource] = useState(null)
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [toast, setToast] = useState(null)
@@ -24,15 +26,19 @@ export default function Products() {
     setTimeout(() => setToast(null), 3000)
   }
 
-  const loadProducts = () => {
+  const loadProducts = async () => {
     setLoading(true)
-    api.getProducts()
-      .then(setProducts)
-      .catch((err) => {
-        showToast('error', 'فشل تحميل المنتجات: ' + err.message)
-        setProducts([])
-      })
-      .finally(() => setLoading(false))
+    try {
+      const { data, source } = await dataService.products.list()
+      setProducts(data || [])
+      setDataSource(source)
+    } catch (err) {
+      showToast('error', 'فشل تحميل المنتجات: ' + err.message)
+      setProducts([])
+      setDataSource('error')
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => { loadProducts() }, [])
@@ -128,7 +134,19 @@ export default function Products() {
       <div className="bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl border border-slate-200/60 dark:border-slate-700/60 rounded-2xl p-4 shadow-sm">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 mb-4">
           <div>
-            <h1 className="text-lg font-extrabold text-slate-800 dark:text-slate-100">إدارة المنتجات</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-extrabold text-slate-800 dark:text-slate-100">إدارة المنتجات</h1>
+              {dataSource && (
+                <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                  dataSource === 'supabase'
+                    ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border border-emerald-200/60'
+                    : 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 border border-amber-200/60'
+                }`} title={dataSource === 'supabase' ? 'قراءة مباشرة من Supabase' : 'قراءة عبر Backend (fallback)'}>
+                  <Database className="w-2.5 h-2.5" />
+                  {dataSource === 'supabase' ? 'Supabase' : 'Backend'}
+                </span>
+              )}
+            </div>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">{stats.total} منتج • {stats.active} نشط</p>
           </div>
           <button onClick={handleOpenAdd}

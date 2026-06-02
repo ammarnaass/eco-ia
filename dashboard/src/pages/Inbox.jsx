@@ -2,9 +2,10 @@ import { useState, useEffect, useRef } from 'react'
 import {
   Search, Phone, MessageCircle, Camera, Send, Bot, Sparkles,
   CheckCircle2, Info, RefreshCw, X, User, MapPin, Package,
-  Hash, Zap, ChevronRight, Wifi, WifiOff, Loader2
+  Hash, Zap, ChevronRight, Wifi, WifiOff, Loader2, Database
 } from 'lucide-react'
 import { api } from '../api.js'
+import dataService from '../lib/dataService.js'
 import Avatar from '../components/ui/Avatar.jsx'
 import Badge from '../components/ui/Badge.jsx'
 import { channelConfig } from '../lib/design-tokens.js'
@@ -37,15 +38,18 @@ export default function Inbox() {
 
   const messagesEndRef = useRef(null)
 
-  const fetchData = () => {
+  const fetchData = async () => {
     setLoading(true)
-    Promise.all([
-      api.getConversations().catch(() => []),
-      api.getOrders().catch(() => [])
-    ]).then(([convs, ords]) => {
-      setConversations(convs)
-      setOrders(ords)
-    }).finally(() => setLoading(false))
+    try {
+      const [convsRes, ordsRes] = await Promise.all([
+        dataService.conversations.list().catch(() => ({ data: [] })),
+        dataService.orders.list().catch(() => ({ data: [] })),
+      ])
+      setConversations(convsRes.data || [])
+      setOrders(ordsRes.data || [])
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => {
@@ -59,8 +63,8 @@ export default function Inbox() {
       try {
         const payload = JSON.parse(event.data)
         if (payload.type === 'conversation_updated') {
-          api.getConversations().then(setConversations).catch(() => {})
-          api.getOrders().then(setOrders).catch(() => {})
+          dataService.conversations.list().then(({ data }) => setConversations(data || [])).catch(() => {})
+          dataService.orders.list().then(({ data }) => setOrders(data || [])).catch(() => {})
         }
       } catch (e) { /* silent */ }
     }

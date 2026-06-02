@@ -171,8 +171,57 @@ npm run preview    # معاينة البناء
 
 ```env
 VITE_API_URL=http://localhost:3000/api
+
+# Supabase — قراءة مباشرة من الواجهة (Anon Key آمن للعموم)
 VITE_SUPABASE_URL=https://xxxxx.supabase.co
-VITE_SUPABASE_ANON_KEY=xxxxx
+VITE_SUPABASE_ANON_KEY=eyJhbGciOi...      # Anon/Publishable Key
+```
+
+---
+
+## 🔌 الربط بقاعدة البيانات (Hybrid Architecture)
+
+يستخدم المشروع **استراتيجية هجينة ذكية** للوصول إلى Supabase:
+
+```
+┌─────────────────────────────────────────────────────┐
+│         Dashboard (React + Vite)                    │
+├─────────────────────────────────────────────────────┤
+│  dataService.js (طبقة وسيطة موحدة)                  │
+│   ├─ READ  (GET)    → Supabase مباشرة ⚡            │
+│   └─ WRITE + منطق  → Backend (crm-bot) 🔒          │
+└─────────────────────────────────────────────────────┘
+           ↓                          ↓
+   (Supabase REST)            (Express + CORS)
+           ↓                          ↓
+           └─────────→ Supabase PostgreSQL
+```
+
+### القاعدة الذهبية
+| نوع الطلب | المسار | السبب |
+|---|---|---|
+| **GET** (عرض، قراءة) | Supabase مباشرة | ⚡ أسرع، أبسط |
+| **POST/PUT/DELETE** (كتابة) | Backend | 🔒 منطق تجاري |
+| **AI, PDF, Email, Webhooks** | Backend فقط | 🧠 معالجة معقدة |
+| **SSE (real-time updates)** | Backend | 🔄 streams فقط |
+
+### الفوائد
+- ⚡ **أداء عالي**: استعلامات القراءة أسرع بمرتين (skip الـ Backend)
+- 🔄 **Fallback تلقائي**: لو Supabase فشل → Backend تلقائياً
+- 🔒 **أمان**: Service Role Key يبقى في Backend فقط
+- 🎯 **شفافية**: badge صغير يظهر مصدر البيانات ("Supabase" أو "Backend")
+- 💰 **تكلفة أقل**: ضغط أقل على Backend
+
+### الملفات الرئيسية
+- `dashboard/src/lib/dataService.js` — الطبقة الوسيطة الموحدة
+- `dashboard/src/utils/supabase.js` — Supabase client محسّن
+- `dashboard/src/api.js` — Backend API client
+
+### Fallback السلوك
+```js
+// مثال: dataService.products.list()
+const { data, source } = await dataService.products.list()
+// source: 'supabase' أو 'backend'
 ```
 
 ---
