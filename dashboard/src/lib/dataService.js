@@ -1,30 +1,27 @@
 /**
  * dataService — طبقة وسيطة موحدة للوصول للبيانات
  *
- * الاستراتيجية المختلطة الذكية:
- *   - Supabase (مباشر): المنتجات CRUD + الطلبات CRUD + استعلامات التوكنز
- *   - Backend: AI، تنفيذ الطلبات (PDF/Email/WhatsApp)، ردود، روابط منصات التوكنز
+ * الاستراتيجية:
+ *   - READ (GET) → Backend (crm-bot) — يعمل دائماً، يدعم joins/computed
+ *   - WRITE (POST/PUT/DELETE) → Supabase مباشرة (أسرع) + Backend fallback
+ *   - المنطق المعقد (AI, PDF, Email, WhatsApp) → Backend دائماً
  *
- * في حال فشل Supabase (RLS, network) → fallback تلقائي على Backend.
+ * في حال فشل أي مصدر → fallback تلقائي.
  */
 
-import { supabase, isSupabaseConfigured } from '../utils/supabase.js'
 import { api } from '../api.js'
+import { supabase, isSupabaseConfigured } from '../utils/supabase.js'
 
-// ── Helper: Read with Supabase → Backend fallback ────────────────────────
-async function withFallback(supabaseCall, backendCall) {
-  if (!isSupabaseConfigured) {
-    const data = await backendCall()
-    return { data, source: 'backend' }
-  }
+// ── Helper: Read (Backend primary, no fallback needed) ──────────────────
+// Backend uses SERVICE_ROLE (bypasses RLS) so it always returns real data.
+// We just call it directly — simpler and more reliable.
+const read = (backendCall) => async () => {
   try {
-    const result = await supabaseCall()
-    if (result.error) throw result.error
-    return { data: result.data, source: 'supabase' }
-  } catch (e) {
-    console.warn('[dataService] Supabase read failed, falling back to Backend:', e.message)
     const data = await backendCall()
     return { data, source: 'backend' }
+  } catch (e) {
+    console.error('[dataService] Backend read failed:', e.message)
+    throw e
   }
 }
 
@@ -51,17 +48,11 @@ async function writeWithFallback(supabaseCall, backendCall) {
 
 export const dataService = {
   // ════════════════════════════════════════════════════════════════════════
-  // 📦 PRODUCTS — عبر Supabase مباشرة (CRUD كامل)
+  // 📦 PRODUCTS — قراءة من Backend (دائماً تعمل)، كتابة على Supabase
   // ════════════════════════════════════════════════════════════════════════
   products: {
-    list: () => withFallback(
-      () => supabase.from('products').select('*').order('id'),
-      () => api.getProducts()
-    ),
-    get: (id) => withFallback(
-      () => supabase.from('products').select('*').eq('id', id).maybeSingle(),
-      () => api.getProducts().then(arr => arr.find(p => p.id === id))
-    ),
+    list: read(() => api.getProducts()),
+    get: (id) => read(() => api.getProducts().then(arr => arr.find(p => p.id === id))),
     create: (data) => writeWithFallback(
       () => supabase.from('products').insert(data).select().single(),
       () => api.createProduct(data)
@@ -71,23 +62,17 @@ export const dataService = {
       () => api.updateProduct(id, data)
     ),
     delete: (id) => writeWithFallback(
-      () => supabase.from('products').delete().eq('id', id).select().single(),
+      () => supabase.from('products').delete().eq('id', id),
       () => api.deleteProduct(id)
     ),
   },
 
   // ════════════════════════════════════════════════════════════════════════
-  // 🛒 ORDERS — عبر Supabase للقراءة/التعديل، Backend للتنفيذ
+  // 🛒 ORDERS — قراءة من Backend، كتابة على Supabase
   // ════════════════════════════════════════════════════════════════════════
   orders: {
-    list: () => withFallback(
-      () => supabase.from('orders').select('*').order('created_at', { ascending: false }),
-      () => api.getOrders()
-    ),
-    get: (id) => withFallback(
-      () => supabase.from('orders').select('*').eq('id', id).maybeSingle(),
-      () => api.getOrders().then(arr => arr.find(o => o.id === id))
-    ),
+    list: read(() => api.getOrders()),
+    get: (id) => read(() => api.getOrders().then(arr => arr.find(o => o.id === id))),
     update: (id, data) => writeWithFallback(
       () => supabase.from('orders').update(data).eq('id', id).select().single(),
       () => api.updateOrder(id, data)
@@ -98,13 +83,10 @@ export const dataService = {
   },
 
   // ════════════════════════════════════════════════════════════════════════
-  // 💬 CONVERSATIONS — قراءة من Supabase، ردود من Backend
+  // 💬 CONVERSATIONS — قراءة من Backend، ردود من Backend (AI)
   // ════════════════════════════════════════════════════════════════════════
   conversations: {
-    list: () => withFallback(
-      () => supabase.from('conversations').select('*').order('updated_at', { ascending: false }),
-      () => api.getConversations()
-    ),
+    list: read(() => api.getConversations()),
     // الردود عبر Backend (AI يحتاج مفاتيح + منطق + SSE broadcast)
     sendManualReply: (customerId, message, platform) =>
       api.sendManualReply(customerId, message, platform),
@@ -113,17 +95,14 @@ export const dataService = {
   },
 
   // ════════════════════════════════════════════════════════════════════════
-  // 👥 CUSTOMERS — قراءة من Supabase
+  // 👥 CUSTOMERS — قراءة من Backend
   // ════════════════════════════════════════════════════════════════════════
   customers: {
-    list: () => withFallback(
-      () => supabase.from('customers').select('*').order('created_at', { ascending: false }),
-      () => Promise.resolve([])
-    ),
+    list: read(() => Promise.resolve([])),
   },
 
   // ════════════════════════════════════════════════════════════════════════
-  // 📊 TOKENS / ANALYTICS — عبر Backend (حسابات مُجمّعة + روابط منصات)
+  // 📊 TOKENS / ANALYTICS — عبر Backend (حسابات مُجمّعة + AI tracking)
   // ════════════════════════════════════════════════════════════════════════
   analytics: {
     dashboard: () => api.getDashboardStats(),
