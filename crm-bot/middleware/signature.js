@@ -36,6 +36,10 @@ function verifySignature(req, res, next) {
     );
     // Log first 100 chars of raw body for debugging (do NOT log full body in production)
     logger.error(`Body preview: ${rawBuf.toString('utf8').slice(0, 100)}`);
+    logger.error(
+      `App Secret in use: first4='${appSecret.slice(0,4)}' len=${appSecret.length} ` +
+      `source=${process.env.META_APP_SECRET === appSecret ? '.env' : '(overridden)'}`
+    );
     return res.status(401).send('Invalid signature');
   }
 
