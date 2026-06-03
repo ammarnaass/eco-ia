@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import {
   Link2, Plus, Trash2, Check, Copy, Info, Phone, ShieldCheck,
-  AlertCircle, Loader2, RefreshCw, ExternalLink, CheckCircle2, XCircle, Database
+  AlertCircle, Loader2, RefreshCw, ExternalLink, CheckCircle2, XCircle, Database, Send, X
 } from 'lucide-react'
 import { api } from '../../../api.js'
 import CopyField from '../components/CopyField.jsx'
@@ -14,6 +14,10 @@ export default function WhatsAppTab({ config, showToast }) {
   const [waLoading, setWaLoading] = useState(true)
   const [testResult, setTestResult] = useState(null)
   const [testing, setTesting] = useState(false)
+  const [showSendTest, setShowSendTest] = useState(false)
+  const [sendTestForm, setSendTestForm] = useState({ to: '', template: '3p_direct_integration_test_template', language: 'en_US', api_version: 'v25.0' })
+  const [sendTestResult, setSendTestResult] = useState(null)
+  const [sendingTest, setSendingTest] = useState(false)
 
   const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
   const webhookUrl = `${API_BASE.replace('/api', '')}/api/whatsapp/webhook`
@@ -81,6 +85,25 @@ export default function WhatsAppTab({ config, showToast }) {
     }
   }
 
+  const sendTest = async () => {
+    if (!sendTestForm.to.trim()) {
+      showToast('error', 'يرجى إدخال رقم المستلم')
+      return
+    }
+    setSendingTest(true)
+    setSendTestResult(null)
+    try {
+      const result = await api.sendWhatsAppTest(sendTestForm)
+      setSendTestResult(result)
+      if (result.success) showToast('success', result.message)
+      else showToast('error', result.message)
+    } catch (e) {
+      setSendTestResult({ success: false, message: 'فشل: ' + e.message })
+    } finally {
+      setSendingTest(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Active WhatsApp Account Card (from env or DB) */}
@@ -128,6 +151,15 @@ export default function WhatsAppTab({ config, showToast }) {
               >
                 {testing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
                 اختبار الاتصال
+              </button>
+              <button
+                onClick={() => setShowSendTest(true)}
+                disabled={!waInfo?.has_credentials}
+                className="text-[11px] font-bold text-white bg-gradient-to-l from-blue-500 to-indigo-600 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl px-3.5 py-2 flex items-center gap-1.5 shadow-md transition-all"
+                title="إرسال رسالة اختبارية عبر Graph API"
+              >
+                <Send className="w-3.5 h-3.5" />
+                إرسال رسالة
               </button>
             </div>
           </div>
@@ -304,6 +336,124 @@ export default function WhatsAppTab({ config, showToast }) {
           >
             <Plus className="w-3.5 h-3.5" /> إضافة إلى قاعدة البيانات
           </button>
+        </div>
+      )}
+
+      {/* Send Test Message Modal */}
+      {showSendTest && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in" onClick={() => setShowSendTest(false)}>
+          <div onClick={e => e.stopPropagation()} className="relative bg-white dark:bg-slate-800 w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 animate-scale-in">
+            <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-slate-700">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+                  <Send className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">إرسال رسالة اختبارية</h3>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">POST /v25.0/{waInfo?.phone_number_id || 'PHONE_ID'}/messages</p>
+                </div>
+              </div>
+              <button onClick={() => setShowSendTest(false)} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+                <X className="w-4 h-4 text-slate-500" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">
+                  رقم المستلم (to) <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={sendTestForm.to}
+                  onChange={e => setSendTestForm({ ...sendTestForm, to: e.target.value })}
+                  placeholder="مثال: 213xxxxxxxxx (بدون +)"
+                  className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 bg-slate-50 dark:bg-slate-900/40 focus:bg-white dark:focus:bg-slate-800 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 outline-none font-mono"
+                />
+                <span className="text-[10px] text-slate-400 mt-1 block">الصيغة الدولية بدون + أو 00 (مثل: 213555123456)</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">Template Name</label>
+                  <input
+                    type="text"
+                    value={sendTestForm.template}
+                    onChange={e => setSendTestForm({ ...sendTestForm, template: e.target.value })}
+                    className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 bg-slate-50 dark:bg-slate-900/40 focus:bg-white dark:focus:bg-slate-800 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 outline-none font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">Language Code</label>
+                  <input
+                    type="text"
+                    value={sendTestForm.language}
+                    onChange={e => setSendTestForm({ ...sendTestForm, language: e.target.value })}
+                    className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 bg-slate-50 dark:bg-slate-900/40 focus:bg-white dark:focus:bg-slate-800 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 outline-none font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">Graph API Version</label>
+                <select
+                  value={sendTestForm.api_version}
+                  onChange={e => setSendTestForm({ ...sendTestForm, api_version: e.target.value })}
+                  className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 bg-slate-50 dark:bg-slate-900/40 focus:bg-white dark:focus:bg-slate-800 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 outline-none font-mono font-bold"
+                >
+                  <option value="v25.0">v25.0 (الأحدث)</option>
+                  <option value="v24.0">v24.0</option>
+                  <option value="v23.0">v23.0</option>
+                  <option value="v22.0">v22.0</option>
+                  <option value="v21.0">v21.0</option>
+                  <option value="v20.0">v20.0</option>
+                  <option value="v19.0">v19.0</option>
+                  <option value="v18.0">v18.0</option>
+                </select>
+              </div>
+
+              {/* Result */}
+              {sendTestResult && (
+                <div className={`p-3 rounded-xl text-[11px] ${
+                  sendTestResult.success
+                    ? 'bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200/60'
+                    : 'bg-rose-50 dark:bg-rose-900/20 border border-rose-200/60'
+                }`}>
+                  <div className="flex items-start gap-2">
+                    {sendTestResult.success ? <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" /> : <XCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />}
+                    <div className="flex-1 min-w-0">
+                      <p className={`font-bold ${sendTestResult.success ? 'text-emerald-700' : 'text-rose-700'}`}>
+                        {sendTestResult.message}
+                      </p>
+                      {sendTestResult.hint && <p className="text-rose-600 mt-1 text-[10px]">{sendTestResult.hint}</p>}
+                      {sendTestResult.message_id && (
+                        <p className="mt-1 text-[10px] text-slate-600 dark:text-slate-300 font-mono">Message ID: {sendTestResult.message_id}</p>
+                      )}
+                      {sendTestResult.code && (
+                        <p className="mt-1 text-[10px] text-slate-500 font-mono">Code: {sendTestResult.code}{sendTestResult.subcode ? ` / Subcode: ${sendTestResult.subcode}` : ''}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-2 p-5 border-t border-slate-100 dark:border-slate-700">
+              <button
+                onClick={() => setShowSendTest(false)}
+                className="flex-1 text-xs font-bold text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+              >
+                إلغاء
+              </button>
+              <button
+                onClick={sendTest}
+                disabled={sendingTest || !sendTestForm.to.trim()}
+                className="flex-1 text-xs font-bold text-white bg-gradient-to-l from-blue-600 to-indigo-600 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl px-4 py-2.5 flex items-center justify-center gap-1.5 shadow-md transition-all"
+              >
+                {sendingTest ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />جاري الإرسال...</> : <><Send className="w-3.5 h-3.5" />إرسال الرسالة</>}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

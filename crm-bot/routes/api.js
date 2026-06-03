@@ -506,4 +506,62 @@ router.post('/whatsapp/test-connection', asyncHandler(async (req, res) => {
   }
 }));
 
+// ── WhatsApp send test template message ────────────────────────────────────
+// Matches the official Meta Graph API curl format the user provided
+router.post('/whatsapp/send-test', asyncHandler(async (req, res) => {
+  const { to, template = '3p_direct_integration_test_template', language = 'en_US', api_version = 'v25.0' } = req.body || {};
+  if (!to) {
+    return res.status(400).json({ success: false, message: 'حقل "to" مطلوب (رقم المستلم بالصيغة الدولية بدون +)' });
+  }
+
+  const token = getConfig('WHATSAPP_TOKEN') || process.env.WHATSAPP_TOKEN;
+  const phoneId = getConfig('WHATSAPP_PHONE_ID') || process.env.WHATSAPP_PHONE_ID;
+  if (!token || !phoneId) {
+    return res.json({ success: false, message: 'بيانات WhatsApp غير مكتملة. تأكد من WHATSAPP_TOKEN و WHATSAPP_PHONE_ID.' });
+  }
+
+  const payload = {
+    messaging_product: 'whatsapp',
+    to,
+    type: 'template',
+    template: { name: template, language: { code: language } },
+  };
+
+  try {
+    const url = `https://graph.facebook.com/${api_version}/${phoneId}/messages`;
+    const apiRes = await fetch(url, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await apiRes.json();
+    if (!apiRes.ok || data.error) {
+      const errMsg = data.error?.message || 'فشل غير معروف';
+      const errCode = data.error?.code;
+      const errSubcode = data.error?.error_subcode;
+      return res.json({
+        success: false,
+        message: `فشل إرسال الرسالة: ${errMsg}`,
+        code: errCode,
+        subcode: errSubcode,
+        hint: errCode === 190 ? 'الـ Token غير صالح. أعد توليده من Meta Business Settings.' :
+              errCode === 100 ? 'تأكد من phone_number_id ورقم المستلم.' :
+              errSubcode === 33 ? 'Template name غير موجود. تأكد من الموافقة على الـ template.' : null,
+        raw: data,
+      });
+    }
+    logger.info(`WhatsApp test template sent to ${to} — message_id=${data.messages?.[0]?.id}`);
+    return res.json({
+      success: true,
+      message: `تم إرسال الرسالة التجريبية إلى ${to} بنجاح ✓`,
+      message_id: data.messages?.[0]?.id,
+      recipient: to,
+      template,
+      language,
+    });
+  } catch (e) {
+    return res.json({ success: false, message: 'خطأ في الاتصال: ' + e.message });
+  }
+}));
+
 module.exports = router;

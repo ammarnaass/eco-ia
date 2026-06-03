@@ -47,4 +47,5 @@ export const api = {
   // WhatsApp info + test
   getWhatsAppInfo: () => fetchJSON('/whatsapp/info'),
   testWhatsAppConnection: () => fetchJSON('/whatsapp/test-connection', { method: 'POST' }),
+  sendWhatsAppTest: (data) => fetchJSON('/whatsapp/send-test', { method: 'POST', body: JSON.stringify(data) }),
 }
