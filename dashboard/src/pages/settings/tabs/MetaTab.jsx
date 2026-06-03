@@ -182,15 +182,33 @@ export default function MetaTab({ config, handleConfigChange, showToast }) {
               <b>للاتصال بـ Instagram Graph API تحتاج:</b>
             </p>
             <ol className="list-decimal list-inside mt-1 space-y-0.5 text-slate-600">
-              <li>تطبيق من نوع <b>Business</b> في Meta Developer</li>
-              <li>إضافة منتج <b>Instagram Graph API</b></li>
-              <li>ربط حساب Instagram Business بصفحة Facebook</li>
-              <li>رمز وصول (Token) من نوع <b>Instagram User Token</b> أو <b>System User Token</b></li>
+              <li>تطبيق من نوع <b>Business</b> في Meta Developer (App ID: <code className="bg-white px-1 rounded">{config.INSTAGRAM_APP_ID || '—'}</code>)</li>
+              <li>إضافة منتج <b>Instagram Graph API</b> للتطبيق</li>
+              <li>ربط حساب Instagram Business بصفحتك على Facebook</li>
+              <li>توليد <b>System User Token</b> بالأذونات: <code className="bg-white px-1 rounded">instagram_basic, instagram_manage_messages, pages_manage_metadata</code></li>
             </ol>
-            <a href="https://developers.facebook.com/apps/" target="_blank" rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 mt-1.5 text-purple-700 font-bold hover:underline">
-              فتح Meta Developers <ExternalLink className="w-3 h-3" />
-            </a>
+            <details className="mt-2">
+              <summary className="cursor-pointer text-purple-700 font-bold hover:underline">
+                📋 خطوات توليد Token الصحيح
+              </summary>
+              <ol className="list-decimal list-inside mt-1 space-y-0.5 text-slate-600 bg-white/60 rounded-lg p-2 mt-1">
+                <li>اذهب لـ <a href="https://business.facebook.com/settings/system-users" target="_blank" rel="noopener noreferrer" className="text-purple-700 underline">business.facebook.com/settings/system-users</a></li>
+                <li>أنشئ System User أو اختر موجود، ثم "Add Assets" → اختر تطبيقك (App ID: {config.INSTAGRAM_APP_ID || '—'})</li>
+                <li>فعّل "Full Control" أو الأذونات المطلوبة</li>
+                <li>اضغط "Generate New Token" → اختر التطبيق → فعّل <b>instagram_basic</b> و <b>instagram_manage_messages</b></li>
+                <li><b className="text-rose-600">انسخ الرمز كاملاً</b> (200+ حرف عادةً). احذر من النسخ المبتور!</li>
+              </ol>
+            </details>
+            <div className="flex items-center gap-3 mt-2">
+              <a href="https://developers.facebook.com/apps/" target="_blank" rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-purple-700 font-bold hover:underline">
+                Meta Developers <ExternalLink className="w-3 h-3" />
+              </a>
+              <a href="https://www.instagram.com/accounts/manage_access/" target="_blank" rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-purple-700 font-bold hover:underline">
+                ربط Instagram <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
           </div>
         </div>
 
@@ -222,12 +240,38 @@ export default function MetaTab({ config, handleConfigChange, showToast }) {
             <textarea
               value={config.INSTAGRAM_ACCESS_TOKEN || ''}
               onChange={e => handleConfigChange('INSTAGRAM_ACCESS_TOKEN', e.target.value)}
-              placeholder="رمز طويل يبدأ بـ EAAL... أو IGQVJ... (50+ حرف)"
-              className="w-full text-xs border border-gray-200 rounded-xl px-4 py-3 bg-gray-50 focus:bg-white focus:ring-1 focus:ring-purple-500 focus:border-purple-500 transition-all outline-none shadow-2xs font-mono h-20 resize-none"
+              placeholder="IGAA... أو EAAL... (200+ حرف عادةً)"
+              className={`w-full text-xs border rounded-xl px-4 py-3 focus:bg-white focus:ring-1 transition-all outline-none shadow-2xs font-mono h-20 resize-none ${
+                config.INSTAGRAM_ACCESS_TOKEN && config.INSTAGRAM_ACCESS_TOKEN.length < 100
+                  ? 'border-rose-300 bg-rose-50 focus:ring-rose-500 focus:border-rose-500'
+                  : config.INSTAGRAM_ACCESS_TOKEN && /^(IGAA|EAAL|IGQVJ)/.test(config.INSTAGRAM_ACCESS_TOKEN)
+                  ? 'border-emerald-200 bg-gray-50 focus:ring-purple-500 focus:border-purple-500'
+                  : 'border-gray-200 bg-gray-50 focus:ring-purple-500 focus:border-purple-500'
+              }`}
             />
-            <span className="text-[10px] text-gray-400 block">
-              مفتاح الوصول لـ Instagram Graph API. إذا لم يكن موجوداً، يُستخدم رمز فيسبوك تلقائياً (FB_PAGE_TOKEN).
-            </span>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] text-gray-400 block flex-1">
+                مفتاح الوصول لـ Instagram Graph API. إذا لم يكن موجوداً، يُستخدم رمز فيسبوك تلقائياً (FB_PAGE_TOKEN).
+              </span>
+              {config.INSTAGRAM_ACCESS_TOKEN && (
+                <span className={`text-[10px] font-bold shrink-0 ${
+                  config.INSTAGRAM_ACCESS_TOKEN.length < 100
+                    ? 'text-rose-600'
+                    : /^(IGAA|EAAL|IGQVJ)/.test(config.INSTAGRAM_ACCESS_TOKEN)
+                    ? 'text-emerald-600'
+                    : 'text-amber-600'
+                }`}>
+                  {config.INSTAGRAM_ACCESS_TOKEN.length} حرف
+                  {config.INSTAGRAM_ACCESS_TOKEN.length < 100 && ' ⚠️ قصير جداً'}
+                </span>
+              )}
+            </div>
+            {config.INSTAGRAM_ACCESS_TOKEN && config.INSTAGRAM_ACCESS_TOKEN.length < 100 && (
+              <div className="text-[10px] text-rose-600 bg-rose-50 border border-rose-200 rounded-lg p-2 mt-1">
+                ⚠️ <b>الرمز قصير جداً (مبتور).</b> انسخه كاملاً بدون أي فقاعة نسخ.
+                الرمز الصحيح عادةً 200+ حرف.
+              </div>
+            )}
           </div>
           <div className="space-y-1.5">
             <label className="block text-xs font-bold text-gray-700">اسم المستخدم (Username) - اختياري</label>
