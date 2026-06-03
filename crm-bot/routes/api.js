@@ -614,4 +614,63 @@ router.post('/test/simulate-instagram-comment', asyncHandler(async (req, res) =>
   }
 }));
 
+// ── Test: Simulate Meta's exact webhook payload (v25.0) ───────────────────
+// Accepts the EXACT sample payload from Meta docs so users can copy-paste it.
+// POST /api/test/simulate-instagram-payload
+// Body can be either:
+//   (A) A single "value" object (the field-level sample):
+//       { "field": "messages", "value": { "sender": {...}, "recipient": {...}, ... } }
+//   (B) A full webhook payload (object=instagram, entry=[...messaging]):
+//       { "object": "instagram", "entry": [...] }
+router.post('/test/simulate-instagram-payload', asyncHandler(async (req, res) => {
+  const body = req.body || {};
+  let processed = [];
+
+  // Form A: single "value" object (matches the "Send Test to server" button on Meta)
+  if (body.value && body.value.sender) {
+    const evt = body.value;
+    const senderId = evt.sender?.id;
+    const text = evt.message?.text || '';
+    const senderName = 'Meta Sample User';
+    if (senderId && text) {
+      const reply = await processMessage({ platform: 'instagram', userId: senderId, text, userName: senderName });
+      processed.push({ sender_id: senderId, text, reply: reply || '(no AI reply)' });
+    }
+  }
+
+  // Form B: full webhook payload (with object + entry)
+  if (body.object === 'instagram' && Array.isArray(body.entry)) {
+    for (const entry of body.entry) {
+      if (!Array.isArray(entry.messaging)) continue;
+      for (const evt of entry.messaging) {
+        try {
+          if (evt.message?.is_echo) continue; // skip our own messages
+          const senderId = evt.sender?.id;
+          const text = evt.message?.text || '';
+          if (senderId && text) {
+            const reply = await processMessage({ platform: 'instagram', userId: senderId, text });
+            processed.push({ sender_id: senderId, text, reply: reply || '(no AI reply)' });
+          }
+        } catch (e) {
+          logger.error(`simulate-instagram-payload: event error: ${e.message}`);
+        }
+      }
+    }
+  }
+
+  if (processed.length === 0) {
+    return res.json({
+      success: false,
+      message: 'لم يتم العثور على رسائل صالحة. أرسل إما {"value":{...}} أو {"object":"instagram","entry":[...]}',
+    });
+  }
+
+  res.json({
+    success: true,
+    message: `تم معالجة ${processed.length} رسالة Instagram اختبارية بنجاح ✓`,
+    processed,
+    note: 'افتح Inbox في الواجهة لرؤية الرسائل',
+  });
+}));
+
 module.exports = router;
