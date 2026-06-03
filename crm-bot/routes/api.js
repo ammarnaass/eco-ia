@@ -373,22 +373,72 @@ router.post('/test-connection', asyncHandler(async (req, res) => {
       if (fbRes.ok && fbData.id) {
         return res.json({ success: true, message: `الاتصال ناجح! الصفحة: ${fbData.name || fbData.id}` });
       }
-      return res.json({ success: false, message: `فشل الاتصال: ${fbData.error?.message || 'Token غير صالح'}` });
+      return res.json({
+        success: false,
+        message: `فشل الاتصال: ${fbData.error?.message || 'Token غير صالح'}`,
+        code: fbData.error?.code,
+        type: fbData.error?.type,
+      });
     }
 
     if (platform === 'instagram') {
       const igId = getConfig('INSTAGRAM_BUSINESS_ID');
       if (!igId) {
-        return res.json({ success: false, message: 'INSTAGRAM_BUSINESS_ID غير مضبوط. يرجى إدخال معرف حساب إنستغرام التجاري أولاً.' });
+        return res.json({
+          success: false,
+          message: 'INSTAGRAM_BUSINESS_ID غير مضبوط. يرجى إدخال معرف حساب إنستغرام التجاري أولاً.',
+          code: 'MISSING_BUSINESS_ID',
+        });
       }
-      // Use dedicated Instagram token if set, otherwise fallback to Facebook token for test
+      // Use dedicated Instagram token if set, otherwise fallback to Facebook token
       const igToken = getConfig('INSTAGRAM_ACCESS_TOKEN') || token;
-      const igRes = await fetch(`https://graph.facebook.com/v18.0/${igId}?access_token=${igToken}&fields=id,username`);
+      if (!igToken || igToken === 'undefined' || igToken.length < 20) {
+        return res.json({
+          success: false,
+          message: 'رمز الوصول (Token) غير صالح أو فارغ. يرجى إدخال INSTAGRAM_ACCESS_TOKEN صحيح.',
+          code: 'INVALID_TOKEN_FORMAT',
+          hint: 'الرمز يجب أن يكون EAAL... أو IGQVJ... (أكثر من 50 حرف)',
+        });
+      }
+      const igRes = await fetch(`https://graph.facebook.com/v18.0/${igId}?access_token=${igToken}&fields=id,username,name,profile_picture_url`);
       const igData = await igRes.json();
       if (igRes.ok && igData.id) {
-        return res.json({ success: true, message: `الاتصال ناجح! الحساب: @${igData.username || igData.id}` });
+        return res.json({
+          success: true,
+          message: `الاتصال ناجح! الحساب: @${igData.username || igData.id}`,
+          account: {
+            id: igData.id,
+            username: igData.username,
+            name: igData.name,
+          },
+        });
       }
-      return res.json({ success: false, message: `فشل الاتصال: ${igData.error?.message || 'Token أو Business ID غير صالح'}` });
+      // Parse Meta API error for better UX
+      const errMsg = igData.error?.message || 'Token أو Business ID غير صالح';
+      const errCode = igData.error?.code;
+      const errType = igData.error?.type;
+      const errSubcode = igData.error?.error_subcode;
+
+      let friendlyHint = '';
+      if (errSubcode === 460) {
+        friendlyHint = 'الرمز غير صحيح أو منتهي الصلاحية. أعد توليده من Meta Business Settings.';
+      } else if (errCode === 190) {
+        friendlyHint = 'الرمز غير صالح. تأكد من نسخه كاملاً من Meta Developer Portal.';
+      } else if (errCode === 100) {
+        friendlyHint = 'INSTAGRAM_BUSINESS_ID غير صحيح. تأكد من نسخه من إعدادات Instagram Graph API.';
+      }
+
+      return res.json({
+        success: false,
+        message: `فشل الاتصال: ${errMsg}${friendlyHint ? ' — ' + friendlyHint : ''}`,
+        code: errCode,
+        type: errType,
+        subcode: errSubcode,
+        debug: {
+          business_id: igId,
+          token_preview: igToken ? `${igToken.slice(0, 8)}...${igToken.slice(-4)}` : null,
+        },
+      });
     }
   } catch (e) {
     return res.json({ success: false, message: 'خطأ في الاتصال: ' + e.message });

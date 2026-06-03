@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link2, Globe, MessageSquare, Camera, AlertCircle, CheckCircle, Loader2 } from 'lucide-react'
+import { Link2, Globe, MessageSquare, Camera, AlertCircle, CheckCircle, Loader2, Info, X, ExternalLink } from 'lucide-react'
 import CopyField from '../components/CopyField.jsx'
 
 export default function MetaTab({ config, handleConfigChange, showToast }) {
@@ -16,13 +16,63 @@ export default function MetaTab({ config, handleConfigChange, showToast }) {
     try {
       const res = await fetch(`${API_BASE}/test-connection?platform=${platform}`, { method: 'POST' })
       const data = await res.json()
-      setTestResult(prev => ({ ...prev, [platform]: data.success ? 'success' : 'error' }))
-      showToast(data.success ? 'success' : 'error', data.message || (data.success ? 'تم التحقق بنجاح' : 'فشل الاتصال'))
+      setTestResult(prev => ({
+        ...prev,
+        [platform]: {
+          status: data.success ? 'success' : 'error',
+          message: data.message,
+          code: data.code,
+          type: data.type,
+          subcode: data.subcode,
+          hint: data.hint,
+          debug: data.debug,
+          account: data.account,
+        }
+      }))
+      if (data.success) {
+        showToast('success', data.message || 'تم التحقق بنجاح')
+      } else {
+        showToast('error', data.message || 'فشل الاتصال')
+      }
     } catch (e) {
-      setTestResult(prev => ({ ...prev, [platform]: 'error' }))
+      setTestResult(prev => ({ ...prev, [platform]: { status: 'error', message: 'فشل اختبار الاتصال: ' + e.message } }))
       showToast('error', 'فشل اختبار الاتصال: ' + e.message)
     }
     setTesting(prev => ({ ...prev, [platform]: false }))
+  }
+
+  const TestResultPanel = ({ result, platform }) => {
+    if (!result) return null
+    const isSuccess = result.status === 'success'
+    return (
+      <div className={`mt-3 p-3 rounded-xl flex items-start gap-2 text-[11px] ${
+        isSuccess
+          ? 'bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200/60'
+          : 'bg-rose-50 dark:bg-rose-900/20 border border-rose-200/60'
+      }`}>
+        {isSuccess ? <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" /> : <X className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />}
+        <div className="flex-1 min-w-0">
+          <p className={`font-bold ${isSuccess ? 'text-emerald-700' : 'text-rose-700'}`}>{result.message}</p>
+          {result.hint && <p className="text-rose-600 mt-1 text-[10px]">{result.hint}</p>}
+          {result.code && (
+            <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-1 text-[10px] text-slate-600">
+              {result.code && <span><b>Code:</b> {result.code}</span>}
+              {result.subcode && <span><b>Subcode:</b> {result.subcode}</span>}
+              {result.type && <span><b>Type:</b> {result.type}</span>}
+            </div>
+          )}
+          {result.debug?.token_preview && (
+            <p className="mt-1 text-[10px] text-slate-500 font-mono">Token: {result.debug.token_preview} | Business ID: {result.debug.business_id}</p>
+          )}
+          {result.account && (
+            <div className="mt-2 text-[10px] text-slate-600 space-y-0.5">
+              {result.account.username && <p><b>@username:</b> @{result.account.username}</p>}
+              {result.account.name && <p><b>Name:</b> {result.account.name}</p>}
+            </div>
+          )}
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -108,17 +158,8 @@ export default function MetaTab({ config, handleConfigChange, showToast }) {
             {testing.facebook ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Globe className="w-3.5 h-3.5" />}
             اختبار اتصال فيسبوك
           </button>
-          {testResult.facebook === 'success' && (
-            <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-600">
-              <CheckCircle className="w-3.5 h-3.5" /> الاتصال ناجح
-            </span>
-          )}
-          {testResult.facebook === 'error' && (
-            <span className="flex items-center gap-1 text-[11px] font-bold text-red-500">
-              <AlertCircle className="w-3.5 h-3.5" /> فشل الاتصال
-            </span>
-          )}
         </div>
+        <TestResultPanel result={testResult.facebook} platform="facebook" />
       </div>
 
       {/* Instagram Section */}
@@ -133,7 +174,38 @@ export default function MetaTab({ config, handleConfigChange, showToast }) {
           </div>
         </div>
 
+        {/* Instagram App Info Banner */}
+        <div className="p-3 rounded-xl bg-gradient-to-l from-pink-50/50 to-purple-50/30 border border-purple-100/60 flex items-start gap-2 text-[11px]">
+          <Info className="w-4 h-4 text-purple-500 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-slate-700">
+              <b>للاتصال بـ Instagram Graph API تحتاج:</b>
+            </p>
+            <ol className="list-decimal list-inside mt-1 space-y-0.5 text-slate-600">
+              <li>تطبيق من نوع <b>Business</b> في Meta Developer</li>
+              <li>إضافة منتج <b>Instagram Graph API</b></li>
+              <li>ربط حساب Instagram Business بصفحة Facebook</li>
+              <li>رمز وصول (Token) من نوع <b>Instagram User Token</b> أو <b>System User Token</b></li>
+            </ol>
+            <a href="https://developers.facebook.com/apps/" target="_blank" rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 mt-1.5 text-purple-700 font-bold hover:underline">
+              فتح Meta Developers <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <label className="block text-xs font-bold text-gray-700">معرف تطبيق إنستغرام (Instagram App ID)</label>
+            <input
+              type="text"
+              value={config.INSTAGRAM_APP_ID || ''}
+              onChange={e => handleConfigChange('INSTAGRAM_APP_ID', e.target.value)}
+              placeholder="مثال: 3948712362101332"
+              className="w-full text-xs border border-gray-200 rounded-xl px-4 py-3 bg-gray-50 focus:bg-white focus:ring-1 focus:ring-purple-500 focus:border-purple-500 transition-all outline-none shadow-2xs font-mono"
+            />
+            <span className="text-[10px] text-gray-400 block">معرف تطبيق Instagram Business في Meta Developer (App Dashboard → Settings → Basic).</span>
+          </div>
           <div className="space-y-1.5">
             <label className="block text-xs font-bold text-gray-700">معرف حساب إنستغرام التجاري (Instagram Business ID)</label>
             <input
@@ -143,29 +215,31 @@ export default function MetaTab({ config, handleConfigChange, showToast }) {
               placeholder="مثال: 17841400000000000"
               className="w-full text-xs border border-gray-200 rounded-xl px-4 py-3 bg-gray-50 focus:bg-white focus:ring-1 focus:ring-purple-500 focus:border-purple-500 transition-all outline-none shadow-2xs font-mono"
             />
-            <span className="text-[10px] text-gray-400 block">المعرف الرقمي لحساب Instagram Business المرتبط بصفحتك.</span>
+            <span className="text-[10px] text-gray-400 block">المعرف الرقمي لحساب Instagram Business (يبدأ بـ 17841...).</span>
           </div>
-                  <div className="space-y-1.5">
-                    <label className="block text-xs font-bold text-gray-700">رمز وصول إنستغرام (Instagram Access Token)</label>
-                    <textarea
-                      value={config.INSTAGRAM_ACCESS_TOKEN || ''}
-                      onChange={e => handleConfigChange('INSTAGRAM_ACCESS_TOKEN', e.target.value)}
-                      placeholder="رمز طويل يبدأ بـ EAAL... (يمكن استخدام نفس رمز فيسبوك إذا كان مشتركاً)"
-                      className="w-full text-xs border border-gray-200 rounded-xl px-4 py-3 bg-gray-50 focus:bg-white focus:ring-1 focus:ring-purple-500 focus:border-purple-500 transition-all outline-none shadow-2xs font-mono h-20 resize-none"
-                    />
-                    <span className="text-[10px] text-gray-400 block">مفتاح الوصول الخاص بـ Instagram Graph API. إذا كان التطبيق مشتركاً يمكن ترك هذا الحقل فارغاً وسيُستخدم رمز فيسبوك.</span>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="block text-xs font-bold text-gray-700">اسم المستخدم (Username) - اختياري</label>
-                    <input
-                      type="text"
-                      value={config.INSTAGRAM_USERNAME || ''}
-                      onChange={e => handleConfigChange('INSTAGRAM_USERNAME', e.target.value)}
-                      placeholder="مثال: mybusiness"
-                      className="w-full text-xs border border-gray-200 rounded-xl px-4 py-3 bg-gray-50 focus:bg-white focus:ring-1 focus:ring-purple-500 focus:border-purple-500 transition-all outline-none shadow-2xs"
-                    />
-                    <span className="text-[10px] text-gray-400 block">للتعريف والعرض فقط داخل لوحة التحكم.</span>
-                  </div>
+          <div className="md:col-span-2 space-y-1.5">
+            <label className="block text-xs font-bold text-gray-700">رمز وصول إنستغرام (Instagram Access Token)</label>
+            <textarea
+              value={config.INSTAGRAM_ACCESS_TOKEN || ''}
+              onChange={e => handleConfigChange('INSTAGRAM_ACCESS_TOKEN', e.target.value)}
+              placeholder="رمز طويل يبدأ بـ EAAL... أو IGQVJ... (50+ حرف)"
+              className="w-full text-xs border border-gray-200 rounded-xl px-4 py-3 bg-gray-50 focus:bg-white focus:ring-1 focus:ring-purple-500 focus:border-purple-500 transition-all outline-none shadow-2xs font-mono h-20 resize-none"
+            />
+            <span className="text-[10px] text-gray-400 block">
+              مفتاح الوصول لـ Instagram Graph API. إذا لم يكن موجوداً، يُستخدم رمز فيسبوك تلقائياً (FB_PAGE_TOKEN).
+            </span>
+          </div>
+          <div className="space-y-1.5">
+            <label className="block text-xs font-bold text-gray-700">اسم المستخدم (Username) - اختياري</label>
+            <input
+              type="text"
+              value={config.INSTAGRAM_USERNAME || ''}
+              onChange={e => handleConfigChange('INSTAGRAM_USERNAME', e.target.value)}
+              placeholder="مثال: mybusiness"
+              className="w-full text-xs border border-gray-200 rounded-xl px-4 py-3 bg-gray-50 focus:bg-white focus:ring-1 focus:ring-purple-500 focus:border-purple-500 transition-all outline-none shadow-2xs"
+            />
+            <span className="text-[10px] text-gray-400 block">للتعريف والعرض فقط داخل لوحة التحكم.</span>
+          </div>
           <div className="space-y-1.5">
             <label className="block text-xs font-bold text-gray-700">رمز التحقق (Verify Token) — مشترك مع فيسبوك</label>
             <input
@@ -244,17 +318,8 @@ export default function MetaTab({ config, handleConfigChange, showToast }) {
             {testing.instagram ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Camera className="w-3.5 h-3.5" />}
             اختبار اتصال إنستغرام
           </button>
-          {testResult.instagram === 'success' && (
-            <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-600">
-              <CheckCircle className="w-3.5 h-3.5" /> الاتصال ناجح
-            </span>
-          )}
-          {testResult.instagram === 'error' && (
-            <span className="flex items-center gap-1 text-[11px] font-bold text-red-500">
-              <AlertCircle className="w-3.5 h-3.5" /> فشل الاتصال
-            </span>
-          )}
         </div>
+        <TestResultPanel result={testResult.instagram} platform="instagram" />
       </div>
     </div>
   )
