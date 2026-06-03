@@ -50,10 +50,18 @@ router.get('/', (req, res) => {
 // POST — Instagram events webhook
 router.post('/', verifySignature, async (req, res) => {
   const body = req.body;
-  if (body.object !== 'instagram') return res.sendStatus(404);
+  // Log every Instagram webhook attempt for debugging
+  logger.info(`Instagram webhook POST received | object=${body?.object} | entries=${body?.entry?.length || 0}`);
+
+  if (body.object !== 'instagram') {
+    logger.warn(`Instagram webhook: object is "${body?.object}" (expected "instagram") — ignoring`);
+    return res.sendStatus(404);
+  }
 
   const dmReplyEnabled    = getConfig('INSTAGRAM_DM_REPLY', 'true')       !== 'false';
   const commentReplyEnabled = getConfig('INSTAGRAM_COMMENT_REPLY', 'true') !== 'false';
+
+  logger.info(`Instagram settings: DM=${dmReplyEnabled} Comments=${commentReplyEnabled}`);
 
   for (const entry of body.entry) {
     // ── A) Comments (via changes[]) ────────────────────────────────

@@ -1,7 +1,7 @@
 const express = require('express');
 const { getUsageStats } = require('../core/unified_ai');
 const { getProducts, getShippingZones, getOrders, addProduct, updateProduct, deleteProduct } = require('../core/order_manager');
-const { getConversations } = require('../core/message_processor');
+const { getConversations, processMessage } = require('../core/message_processor');
 const supabase = require('../lib/supabase');
 const sse = require('../utils/sse');
 const { sendReply } = require('../utils/whatsapp');
@@ -561,6 +561,56 @@ router.post('/whatsapp/send-test', asyncHandler(async (req, res) => {
     });
   } catch (e) {
     return res.json({ success: false, message: 'خطأ في الاتصال: ' + e.message });
+  }
+}));
+
+// ── Test: Simulate an Instagram message ────────────────────────────────────
+// Use this to test the Instagram flow without needing a real webhook
+// POST /api/test/simulate-instagram { sender_id, text, sender_name? }
+router.post('/test/simulate-instagram', asyncHandler(async (req, res) => {
+  const { sender_id = 'TEST_IG_USER_' + Date.now(), text = 'مرحبا من Instagram', sender_name = 'Test IG User' } = req.body || {};
+
+  try {
+    const reply = await processMessage({
+      platform: 'instagram',
+      userId: sender_id,
+      text,
+      userName: sender_name,
+    });
+    res.json({
+      success: true,
+      message: 'تم حقن الرسالة الاختبارية بنجاح ✓',
+      sender_id,
+      text,
+      reply: reply || '(no AI reply generated)',
+      note: 'افتح Inbox في الواجهة لرؤية الرسالة',
+    });
+  } catch (e) {
+    res.json({ success: false, message: 'فشل: ' + e.message });
+  }
+}));
+
+// ── Test: Simulate an Instagram comment ───────────────────────────────────
+router.post('/test/simulate-instagram-comment', asyncHandler(async (req, res) => {
+  const { sender_id = 'TEST_IG_COMMENTER_' + Date.now(), text = 'تعليق اختباري من Instagram', sender_name = 'Test Commenter' } = req.body || {};
+
+  try {
+    const reply = await processMessage({
+      platform: 'instagram',
+      userId: sender_id,
+      text,
+      userName: sender_name,
+    });
+    res.json({
+      success: true,
+      message: 'تم حقن التعليق الاختباري بنجاح ✓',
+      sender_id,
+      text,
+      reply: reply || '(no AI reply generated)',
+      note: 'افتح Inbox في الواجهة لرؤية الرسالة',
+    });
+  } catch (e) {
+    res.json({ success: false, message: 'فشل: ' + e.message });
   }
 }));
 
