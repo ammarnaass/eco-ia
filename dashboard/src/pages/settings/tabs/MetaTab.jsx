@@ -75,6 +75,105 @@ export default function MetaTab({ config, handleConfigChange, showToast }) {
     )
   }
 
+  const InstagramDiagnosticCard = () => {
+    const [diagData, setDiagData] = useState(null)
+    const [diagLoading, setDiagLoading] = useState(false)
+    const [diagExpanded, setDiagExpanded] = useState(false)
+
+    const runDiagnostic = async () => {
+      setDiagLoading(true)
+      try {
+        const r = await fetch(`${API_BASE}/debug/instagram-status`)
+        const d = await r.json()
+        setDiagData(d)
+      } catch (e) {
+        setDiagData({ success: false, message: 'فشل التشخيص: ' + e.message })
+      } finally {
+        setDiagLoading(false)
+      }
+    }
+
+    return (
+      <div className="p-4 rounded-2xl border border-amber-200/60 dark:border-amber-800/40 bg-amber-50/30 dark:bg-amber-900/10">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+            <AlertCircle className="w-4 h-4" />
+            تشخيص استقبال رسائل Instagram
+          </h3>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setDiagExpanded(!diagExpanded)}
+              className="text-[10px] font-bold text-amber-700 hover:underline"
+            >
+              {diagExpanded ? 'إخفاء' : 'عرض التفاصيل'}
+            </button>
+            <button
+              onClick={runDiagnostic}
+              disabled={diagLoading}
+              className="text-[11px] font-bold text-white bg-amber-600 hover:bg-amber-700 rounded-lg px-3 py-1.5 flex items-center gap-1.5 disabled:opacity-50"
+            >
+              {diagLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <AlertCircle className="w-3 h-3" />}
+              فحص الاتصال
+            </button>
+          </div>
+        </div>
+
+        {!diagData && (
+          <p className="text-[11px] text-slate-600 dark:text-slate-400">
+            اضغط "فحص الاتصال" لتشخيص سبب عدم استقبال رسائل Instagram الحقيقية من Meta.
+          </p>
+        )}
+
+        {diagData && (
+          <div className="space-y-2">
+            <div className={`p-2 rounded-lg text-[11px] font-bold ${
+              diagData.success
+                ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
+                : 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300'
+            }`}>
+              {diagData.success ? '✅ ' : '⚠️ '}{diagData.message}
+            </div>
+
+            {diagExpanded && (
+              <div className="space-y-1">
+                {diagData.checks?.map((c, i) => (
+                  <div key={i} className="flex items-start gap-2 p-2 rounded-lg bg-white/60 dark:bg-slate-800/40 text-[11px]">
+                    <span className={`shrink-0 ${c.ok ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      {c.ok ? '✓' : '✗'}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-slate-700 dark:text-slate-200">{c.name}</div>
+                      <div className="font-mono text-[10px] text-slate-500 dark:text-slate-400 break-all">{c.value}</div>
+                      {c.note && <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">💡 {c.note}</div>}
+                    </div>
+                  </div>
+                ))}
+
+                {diagData.checklist && (
+                  <div className="mt-3 p-3 rounded-lg bg-white/60 dark:bg-slate-800/40">
+                    <h4 className="text-xs font-bold text-slate-700 dark:text-slate-200 mb-2">📋 قائمة التحقق:</h4>
+                    <ol className="list-decimal list-inside text-[10px] text-slate-600 dark:text-slate-400 space-y-1">
+                      {diagData.checklist.map((step, i) => (
+                        <li key={i}>{step}</li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
+
+                {diagData.webhook?.callback_url && (
+                  <div className="mt-2 p-2 rounded-lg bg-slate-50 dark:bg-slate-900/40 text-[10px]">
+                    <div className="font-bold text-slate-700 dark:text-slate-200 mb-1">📍 Callback URL في Meta:</div>
+                    <code className="text-purple-700 dark:text-purple-300 break-all">{diagData.webhook.callback_url}</code>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-8 animate-fadeIn">
 
@@ -364,6 +463,9 @@ export default function MetaTab({ config, handleConfigChange, showToast }) {
           </button>
         </div>
         <TestResultPanel result={testResult.instagram} platform="instagram" />
+
+        {/* Instagram Diagnostic Card */}
+        <InstagramDiagnosticCard />
       </div>
     </div>
   )

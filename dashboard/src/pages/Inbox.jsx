@@ -241,7 +241,10 @@ export default function Inbox() {
                           <span className="text-[9px] text-slate-400 shrink-0">{lastMsgTime}</span>
                         </div>
                         <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-                          {c.lastMessage || 'لا توجد رسائل'}
+                          {c.lastUserMessage
+                            ? <>👤 <span className="font-bold">{c.lastUserMessage.slice(0, 40)}</span></>
+                            : (c.lastMessage || 'لا توجد رسائل')
+                          }
                         </p>
                         {c.messageCount > 0 && (
                           <span className="inline-block mt-1 text-[9px] px-1.5 py-0.5 rounded-md bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-bold">

@@ -614,6 +614,126 @@ router.post('/test/simulate-instagram-comment', asyncHandler(async (req, res) =>
   }
 }));
 
+// ── Diagnostic: Why isn't Instagram webhook delivering messages? ──────────
+router.get('/debug/instagram-status', asyncHandler(async (req, res) => {
+  const checks = [];
+  let allOk = true;
+
+  // 1) Check META_APP_SECRET
+  const metaSecret = getConfig('META_APP_SECRET');
+  checks.push({
+    name: 'META_APP_SECRET',
+    ok: !!metaSecret,
+    value: metaSecret ? `${metaSecret.slice(0, 4)}...${metaSecret.slice(-4)} (len=${metaSecret.length})` : 'NOT SET',
+    note: 'يجب أن يطابق "App Secret" في Meta Developer Portal → Settings → Basic',
+  });
+  if (!metaSecret) allOk = false;
+
+  // 2) Check INSTAGRAM_ACCESS_TOKEN
+  const igToken = getConfig('INSTAGRAM_ACCESS_TOKEN');
+  checks.push({
+    name: 'INSTAGRAM_ACCESS_TOKEN',
+    ok: !!igToken && igToken.length > 100,
+    value: igToken ? `${igToken.slice(0, 12)}... (len=${igToken.length})` : 'NOT SET',
+    note: 'يجب أن يكون رمز IGAA أو EAAL صالح (>100 حرف)',
+  });
+  if (!igToken || igToken.length < 100) allOk = false;
+
+  // 3) Check INSTAGRAM_BUSINESS_ID
+  const igBizId = getConfig('INSTAGRAM_BUSINESS_ID');
+  checks.push({
+    name: 'INSTAGRAM_BUSINESS_ID',
+    ok: !!igBizId && igBizId.length >= 10,
+    value: igBizId ? `${igBizId} (len=${igBizId.length})` : 'NOT SET',
+    note: 'Instagram Business Account ID (يبدأ بـ 17841...)',
+  });
+  if (!igBizId || igBizId.length < 10) allOk = false;
+
+  // 4) Check INSTAGRAM_DM_REPLY
+  const dmEnabled = getConfig('INSTAGRAM_DM_REPLY', 'true') !== 'false';
+  checks.push({
+    name: 'INSTAGRAM_DM_REPLY',
+    ok: dmEnabled,
+    value: dmEnabled ? 'true' : 'false',
+    note: 'الرد التلقائي على DM مفعّل؟',
+  });
+
+  // 5) Check FB_VERIFY_TOKEN
+  const verifyToken = getConfig('FB_VERIFY_TOKEN');
+  checks.push({
+    name: 'FB_VERIFY_TOKEN',
+    ok: !!verifyToken,
+    value: verifyToken || 'NOT SET',
+    note: 'يجب أن يطابق "Verify Token" في Meta Developer → Webhooks',
+  });
+
+  // 6) Count recent conversations
+  const { data: recentIgs, count: igCount } = await supabase
+    .from('conversations')
+    .select('id, updated_at', { count: 'exact' })
+    .eq('platform', 'instagram')
+    .order('updated_at', { ascending: false })
+    .limit(1);
+  const lastIgUpdate = recentIgs?.[0]?.updated_at || null;
+  const minutesSinceLast = lastIgUpdate ? Math.floor((Date.now() - new Date(lastIgUpdate).getTime()) / 60000) : null;
+
+  checks.push({
+    name: 'Recent Instagram activity',
+    ok: igCount > 0,
+    value: `${igCount} محادثة (آخر تحديث: ${lastIgUpdate || 'never'})`,
+    note: minutesSinceLast !== null ? `منذ ${minutesSinceLast} دقيقة` : 'لا توجد محادثات',
+  });
+
+  // 7) Test connection to Instagram API
+  let apiTest = { ok: false };
+  if (igToken && igBizId) {
+    try {
+      const r = await fetch(`https://graph.facebook.com/v18.0/${igBizId}?access_token=${encodeURIComponent(igToken)}&fields=id,username`);
+      const d = await r.json();
+      apiTest = {
+        ok: r.ok && d.id,
+        status: r.status,
+        username: d.username,
+        error: d.error?.message,
+      };
+    } catch (e) {
+      apiTest = { ok: false, error: e.message };
+    }
+  }
+  checks.push({
+    name: 'Instagram API test',
+    ok: apiTest.ok,
+    value: apiTest.ok ? `@${apiTest.username} ✓` : (apiTest.error || 'فشل'),
+    note: 'هل يمكن للسيرفر الاتصال بـ Instagram API؟',
+  });
+
+  // 8) Calculate webhook URL
+  const API_BASE = process.env.APP_URL || `http://localhost:${process.env.PORT || 3000}`;
+  const webhookUrl = `${API_BASE}/api/instagram/webhook`;
+
+  res.json({
+    success: allOk,
+    message: allOk
+      ? 'كل الإعدادات صحيحة ✓'
+      : 'بعض الإعدادات ناقصة أو خاطئة. راجع التفاصيل أدناه.',
+    checks,
+    webhook: {
+      callback_url: webhookUrl,
+      verify_endpoint: `${webhookUrl}?hub.mode=subscribe&hub.verify_token=YOUR_TOKEN&hub.challenge=12345`,
+    },
+    checklist: [
+      '1. تأكد من ربط Instagram Business account بصفحة Facebook (في Meta Business Settings)',
+      '2. في Meta Developer → Webhooks، اربط callback URL: ' + webhookUrl,
+      '3. تأكد من أن "Verify Token" في Meta Developer يطابق FB_VERIFY_TOKEN في هذا السيرفر',
+      '4. تأكد من أن "App Secret" في Meta Developer يطابق META_APP_SECRET في هذا السيرفر',
+      '5. في Webhooks subscriptions، فعّل: messages, message_reactions, messaging_postbacks, messaging_seen, messaging_referral, standby',
+      '6. تأكد من أن التطبيق في وضع "Live" (ليس "Development") في Meta Developer',
+      '7. إذا كان التطبيق في Development، فقط أنت (admin) تستطيع إرسال رسائل test',
+      '8. تحقق من logs السيرفر لأي طلبات POST /api/instagram/webhook من Meta',
+    ],
+  });
+}));
+
 // ── Test: Simulate Meta's exact webhook payload (v25.0) ───────────────────
 // Accepts the EXACT sample payload from Meta docs so users can copy-paste it.
 // POST /api/test/simulate-instagram-payload

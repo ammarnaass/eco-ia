@@ -230,6 +230,8 @@ async function getConversations() {
   return (data || []).map(c => {
     const msgs = typeof c.messages === 'string' ? JSON.parse(c.messages) : (c.messages || []);
     const last = msgs[msgs.length - 1];
+    // Find the most recent USER message (not the last assistant reply)
+    const lastUserMsg = [...msgs].reverse().find(m => m.role === 'user');
     const customerInfo = c.customers || {};
     return {
       id: c.id,
@@ -239,7 +241,11 @@ async function getConversations() {
       ai_model: c.ai_model,
       messages: msgs,
       lastMessage: last?.content || '',
+      lastMessageRole: last?.role || null,
+      lastUserMessage: lastUserMsg?.content || '',
+      lastUserTime: lastUserMsg?.timestamp || null,
       messageCount: msgs.length,
+      unreadCount: 0, // TODO: track read state
       lastUpdated: c.updated_at,
       customerName: customerInfo.name || null,
       customerPhone: customerInfo.phone || customerInfo.platform_id || null,
