@@ -614,6 +614,67 @@ router.post('/test/simulate-instagram-comment', asyncHandler(async (req, res) =>
   }
 }));
 
+// ── Test: Bypass signature verification (for debugging Meta Portal mismatch) ──
+// WARNING: This endpoint has NO signature verification — use only for testing!
+router.post('/test/instagram-webhook-noauth', asyncHandler(async (req, res) => {
+  const { processMessage } = require('../core/message_processor');
+  const { sendInstagramReply } = require('../utils/meta');
+  const logger = require('../utils/logger');
+
+  const body = req.body;
+  logger.warn(`⚠️ /test/instagram-webhook-noauth called (NO SIGNATURE CHECK) | body=${JSON.stringify(body).slice(0, 200)}`);
+
+  if (body.object !== 'instagram') {
+    return res.status(400).json({ error: 'Expected object="instagram"', received: body.object });
+  }
+
+  let processed = 0;
+  let errors = 0;
+
+  for (const entry of body.entry || []) {
+    if (!entry.messaging || !Array.isArray(entry.messaging)) continue;
+
+    for (const evt of entry.messaging) {
+      const senderId = evt.sender?.id;
+      const msg = evt.message;
+
+      if (!msg || !senderId) {
+        logger.warn(`Skipping event: no message or sender`);
+        continue;
+      }
+
+      const text = msg.text || '[attachment]';
+      logger.info(`Processing test message from ${senderId}: "${text.slice(0, 60)}"`);
+
+      try {
+        const reply = await processMessage({
+          platform: 'instagram',
+          userId: senderId,
+          text,
+          userName: msg.sender?.username || 'TestUser',
+        });
+
+        if (reply) {
+          await sendInstagramReply(senderId, reply);
+          logger.info(`Sent reply to ${senderId}: "${reply.slice(0, 60)}"`);
+        }
+        processed++;
+      } catch (e) {
+        errors++;
+        logger.error(`Error processing test message: ${e.message}`);
+      }
+    }
+  }
+
+  res.json({
+    success: true,
+    message: `تم معالجة ${processed} رسالة (${errors} أخطاء)`,
+    processed,
+    errors,
+    note: 'هذا endpoint بدون signature verification — للاختبار فقط!',
+  });
+}));
+
 // ── Diagnostic: Why isn't Instagram webhook delivering messages? ──────────
 router.get('/debug/instagram-status', asyncHandler(async (req, res) => {
   const checks = [];
