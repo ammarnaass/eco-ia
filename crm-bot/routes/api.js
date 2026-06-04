@@ -854,4 +854,45 @@ router.post('/test/simulate-instagram-payload', asyncHandler(async (req, res) =>
   });
 }));
 
+// ── Diagnostic: Recent webhook requests ───────────────────────────────────
+const { getRecentWebhooks } = require('../middleware/signature');
+
+router.get('/webhook/recent', asyncHandler(async (req, res) => {
+  const recent = getRecentWebhooks();
+  res.json({
+    success: true,
+    count: recent.length,
+    requests: recent,
+    note: 'آخر 30 webhook request (من الأحدث للأقدم)',
+  });
+}));
+
+// ── Diagnostic: Current META_APP_SECRET (masked) ──────────────────────────
+router.get('/config/meta-secret', asyncHandler(async (req, res) => {
+  const { getConfig } = require('../core/config_store');
+  const secret = getConfig('META_APP_SECRET');
+  
+  if (!secret) {
+    return res.json({
+      success: false,
+      message: 'META_APP_SECRET غير معرّف',
+      configured: false,
+    });
+  }
+
+  const envSecret = process.env.META_APP_SECRET;
+  const source = envSecret === secret ? '.env' : 'supabase_cache';
+  
+  res.json({
+    success: true,
+    configured: true,
+    source,
+    length: secret.length,
+    first4: secret.slice(0, 4),
+    last4: secret.slice(-4),
+    masked: `${secret.slice(0, 4)}${'*'.repeat(Math.max(0, secret.length - 8))}${secret.slice(-4)}`,
+    note: 'هذه هي القيمة التي يستخدمها السيرفر للتحقق من توقيع Meta',
+  });
+}));
+
 module.exports = router;

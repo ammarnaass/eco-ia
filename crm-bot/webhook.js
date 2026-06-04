@@ -30,6 +30,9 @@ app.use(compression({
   }
 }));
 
+// ── Static files (diagnostic pages) ──────────────────────────────────────
+app.use(express.static(path.join(__dirname, 'public')));
+
 // ── Performance: Response time + monitoring ────────────────────────────────
 app.use((req, res, next) => {
   const start = process.hrtime.bigint();

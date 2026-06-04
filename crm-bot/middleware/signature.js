@@ -2,10 +2,34 @@ const crypto = require('crypto');
 const { getConfig } = require('../core/config_store');
 const logger = require('../utils/logger');
 
+// In-memory buffer of recent webhook requests (for diagnostics)
+const recentWebhooks = [];
+const MAX_RECENT = 30;
+
+function recordWebhook(req, status, reason) {
+  recentWebhooks.push({
+    timestamp: new Date().toISOString(),
+    method: req.method,
+    path: req.path,
+    ip: req.ip || req.headers['x-forwarded-for'] || 'unknown',
+    signature: req.headers['x-hub-signature-256'] ? 'present' : 'missing',
+    bodySize: req.rawBody?.length || 0,
+    status,
+    reason,
+    preview: req.rawBody ? req.rawBody.toString('utf8').slice(0, 200) : null,
+  });
+  if (recentWebhooks.length > MAX_RECENT) recentWebhooks.shift();
+}
+
+function getRecentWebhooks() {
+  return [...recentWebhooks].reverse();
+}
+
 function verifySignature(req, res, next) {
   const appSecret = getConfig('META_APP_SECRET');
   if (!appSecret) {
     logger.warn('META_APP_SECRET not set — skipping signature verification');
+    recordWebhook(req, 200, 'no_secret_configured');
     return next();
   }
 
@@ -15,6 +39,7 @@ function verifySignature(req, res, next) {
   const signature = req.headers['x-hub-signature-256'];
   if (!signature) {
     logger.error('Missing X-Hub-Signature-256 header');
+    recordWebhook(req, 401, 'missing_signature_header');
     return res.status(401).send('Missing signature');
   }
 
@@ -40,10 +65,12 @@ function verifySignature(req, res, next) {
       `App Secret in use: first4='${appSecret.slice(0,4)}' len=${appSecret.length} ` +
       `source=${process.env.META_APP_SECRET === appSecret ? '.env' : '(overridden)'}`
     );
+    recordWebhook(req, 401, `signature_mismatch:received=${received.slice(0,8)},expected=${expected.slice(0,8)},secret_first4=${appSecret.slice(0,4)}`);
     return res.status(401).send('Invalid signature');
   }
 
+  recordWebhook(req, 200, 'signature_valid');
   next();
 }
 
-module.exports = { verifySignature };
+module.exports = { verifySignature, getRecentWebhooks };

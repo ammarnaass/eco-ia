@@ -230,12 +230,13 @@
         قارن مع القيمة في السيرفر
       </h3>
       <p>
-        القيمة الحالية في <code>crm-bot/.env</code> السطر 24:
+        القيمة الحالية التي يستخدمها السيرفر:
       </p>
-      <div class="value-box">
-        <div class="value-label">META_APP_SECRET في .env:</div>
-        <code id="env-secret">f1a0b31be15bb19868655ee0d7988c55</code>
-        <button class="copy-btn" onclick="copyToClipboard('env-secret', this)">نسخ</button>
+      <div class="value-box" id="server-secret-box">
+        <div class="value-label">META_APP_SECRET في السيرفر:</div>
+        <code id="env-secret">جاري التحميل...</code>
+        <div id="secret-source" style="margin-top: 8px; font-size: 12px; color: #667eea;"></div>
+        <button class="copy-btn" onclick="copyToClipboard('env-secret', this)" id="copy-secret-btn" style="display:none;">نسخ</button>
       </div>
       <p>
         <strong>إذا كانت القيمة في Meta Portal مختلفة</strong>، لديك خياران:
@@ -244,9 +245,9 @@
         <li>
           <span class="check-icon">✓</span>
           <div>
-            <strong>الخيار أ (موصى به):</strong> حدّث Meta Portal ليطابق <code>.env</code>
+            <strong>الخيار أ (موصى به):</strong> حدّث Meta Portal ليطابق القيمة أعلاه
             <br>
-            في Meta Portal → Settings → Basic → App Secret → اضغط <strong>"Reset"</strong> وضع القيمة: <code>f1a0b31be15bb19868655ee0d7988c55</code>
+            في Meta Portal → Settings → Basic → App Secret → اضغط <strong>"Reset"</strong> وضع القيمة من السيرفر
           </div>
         </li>
         <li>
@@ -254,7 +255,7 @@
           <div>
             <strong>الخيار ب:</strong> حدّث <code>.env</code> ليطابق Meta Portal
             <br>
-            انسخ القيمة من Meta Portal وضعها في <code>crm-bot/.env</code> السطر 24 بدلاً من <code>f1a0b31b...</code>
+            انسخ القيمة من Meta Portal وضعها في <code>crm-bot/.env</code> السطر 24
           </div>
         </li>
       </ul>
@@ -366,6 +367,22 @@ curl "https://YOUR_DOMAIN/api/instagram/webhook?hub.mode=subscribe&hub.verify_to
         <strong>النتيجة:</strong> بعد التطابق، الـ 401 سيختفي والرسائل ستصل ✓
       </p>
     </div>
+
+    <div class="step">
+      <h3>
+        <span class="step-number">📊</span>
+        سجل Webhook Requests (يُحدّث تلقائياً كل 5 ثوانٍ)
+      </h3>
+      <p>
+        آخر 30 webhook request من Meta:
+      </p>
+      <div id="webhook-history" style="background: white; border-radius: 8px; padding: 15px; margin-top: 15px; overflow-x: auto;">
+        <p style="color: #666; text-align: center;">جاري التحميل...</p>
+      </div>
+      <div class="warning" style="margin-top: 15px;">
+        <strong>💡 ملاحظة:</strong> إذا رأيت <code>signature_mismatch</code>، فهذا يعني أن App Secret في Meta Portal مختلف عن القيمة أعلاه.
+      </div>
+    </div>
   </div>
 
   <script>
@@ -392,6 +409,75 @@ curl "https://YOUR_DOMAIN/api/instagram/webhook?hub.mode=subscribe&hub.verify_to
         }, 2000);
       });
     }
+
+    // Load current META_APP_SECRET from server
+    async function loadServerSecret() {
+      try {
+        const res = await fetch('/api/config/meta-secret');
+        const data = await res.json();
+        const secretEl = document.getElementById('env-secret');
+        const sourceEl = document.getElementById('secret-source');
+        const copyBtn = document.getElementById('copy-secret-btn');
+        
+        if (data.success && data.configured) {
+          secretEl.textContent = data.masked;
+          sourceEl.innerHTML = `
+            <strong>المصدر:</strong> ${data.source} | 
+            <strong>الطول:</strong> ${data.length} حرف | 
+            <strong>أول 4:</strong> ${data.first4} | 
+            <strong>آخر 4:</strong> ${data.last4}
+          `;
+          copyBtn.style.display = 'block';
+        } else {
+          secretEl.textContent = 'غير معرّف';
+          sourceEl.textContent = '⚠️ META_APP_SECRET غير موجود في .env أو Supabase';
+        }
+      } catch (e) {
+        document.getElementById('env-secret').textContent = 'خطأ في الاتصال بالسيرفر';
+      }
+    }
+
+    // Load recent webhook requests
+    async function loadRecentWebhooks() {
+      try {
+        const res = await fetch('/api/webhook/recent');
+        const data = await res.json();
+        
+        const container = document.getElementById('webhook-history');
+        if (!container) return;
+        
+        if (data.count === 0) {
+          container.innerHTML = '<p style="color: #666; text-align: center; padding: 20px;">لا توجد webhook requests مسجلة بعد</p>';
+          return;
+        }
+        
+        let html = '<table style="width: 100%; border-collapse: collapse; font-size: 12px;">';
+        html += '<thead><tr style="background: #f8f9fa;"><th style="padding: 8px; text-align: right;">الوقت</th><th style="padding: 8px;">الحالة</th><th style="padding: 8px;">السبب</th><th style="padding: 8px;">IP</th></tr></thead><tbody>';
+        
+        data.requests.forEach(req => {
+          const statusColor = req.status === 200 ? '#28a745' : '#dc3545';
+          const time = new Date(req.timestamp).toLocaleString('ar-EG');
+          html += `<tr style="border-bottom: 1px solid #e0e0e0;">
+            <td style="padding: 8px;">${time}</td>
+            <td style="padding: 8px; color: ${statusColor}; font-weight: bold;">${req.status}</td>
+            <td style="padding: 8px; font-family: monospace; font-size: 11px;">${req.reason}</td>
+            <td style="padding: 8px;">${req.ip}</td>
+          </tr>`;
+        });
+        
+        html += '</tbody></table>';
+        container.innerHTML = html;
+      } catch (e) {
+        console.error('Failed to load webhooks:', e);
+      }
+    }
+
+    // Initialize
+    loadServerSecret();
+    loadRecentWebhooks();
+    
+    // Auto-refresh webhooks every 5 seconds
+    setInterval(loadRecentWebhooks, 5000);
   </script>
 </body>
 </html>
